@@ -1,0 +1,10 @@
+{
+  "name": "@puente-zardain/shared",
+  "version": "0.1.0",
+  "description": "Shared types and utilities",
+  "main": "index.ts",
+  "private": true,
+  "scripts": {
+    "build": "tsc"
+  }
+}

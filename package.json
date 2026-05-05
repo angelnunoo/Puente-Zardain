@@ -1,0 +1,10 @@
+{
+  "name": "puente-zardain",
+  "version": "0.1.0",
+  "description": "Plataforma web de pedidos y fidelización para restaurante Puente de Zardain",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}
