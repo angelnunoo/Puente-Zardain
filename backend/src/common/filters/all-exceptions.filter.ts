@@ -8,11 +8,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest();
 
     let status = 500;
-    let message = 'Error interno del servidor';
+    let message: string | string[] = 'Error interno del servidor';
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
-      message = exception.getResponse() as string;
+      const exceptionResponse = exception.getResponse();
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (exceptionResponse && typeof exceptionResponse === 'object') {
+        message = (exceptionResponse as any).message || (exceptionResponse as any).error || 'Error interno del servidor';
+      }
     }
 
     response.status(status).json({

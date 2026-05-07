@@ -48,7 +48,7 @@ puente-zardain/
 ## Stack Tecnológico
 
 ### Frontend
-- **Next.js 14**: React framework con SSR
+- **Next.js 13**: React framework con SSR
 - **React 18**: Componentes UI
 - **TypeScript**: Type safety
 - **Tailwind CSS**: Styling responsive

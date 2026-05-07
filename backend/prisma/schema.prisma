@@ -8,34 +8,53 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  phone     String   @unique
-  password  String
-  name      String
-  avatar    String?
-  color     String?  @default("#000000")
-  zardas    Int      @default(0)
-  league    String   @default("Bronce Zarda")
-  role      Role     @default(USER)
-  orders    Order[]
-  reviews   Review[]
-  chats     Chat[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                   String                 @id @default(cuid())
+  email                String                 @unique
+  phone                String                 @unique
+  password             String
+  name                 String
+  avatar               String?
+  color                String?                @default("#000000")
+  zardas               Int                    @default(0)
+  league               String                 @default("Bronce Zarda")
+  role                 Role                   @default(USER)
+  phoneVerified        Boolean                @default(false)
+  twoFactorEnabled     Boolean                @default(false)
+  twoFactorCode        String?
+  twoFactorCodeExpires DateTime?
+  orders               Order[]
+  reviews              Review[]
+  chats                Chat[]
+  cart                 Cart?
+  refreshTokens        RefreshToken[]
+  passwordResets       PasswordResetToken[]
+  zardasTransactions   ZardasTransaction[]
+  zardasBalance        ZardasBalance?
+  incidences           Incidence[]
+  favorites            UserFavorite[]
+  savedAddresses       SavedAddress[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 }
 
 model Product {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
   description String?
   price       Float
   image       String?
   category    String
+  stock       Int           @default(50)
+  active      Boolean       @default(true)
   ingredients Ingredient[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
   orderItems  OrderItem[]
+  cartItems   CartItem[]
+  favorites   UserFavorite[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([category])
+  @@index([active])
 }
 
 model Ingredient {
@@ -48,28 +67,296 @@ model Ingredient {
 }
 
 model Order {
-  id            String      @id @default(cuid())
-  userId        String
-  user          User        @relation(fields: [userId], references: [id])
-  items         OrderItem[]
-  total         Float
-  status        OrderStatus @default(PENDING)
-  delivery      Boolean     @default(false)
-  address       String?
-  paymentMethod String
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  chat          Chat?
+  id              String      @id @default(cuid())
+  orderNumber     Int         @unique @default(autoincrement())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  subtotal        Float
+  tax             Float       @default(0)
+  deliveryFee     Float       @default(0)
+  total           Float
+  status          OrderStatus @default(PENDING)
+  paymentMethod   String
+  paymentStatus   String      @default("PENDING")
+  paymentIntentId String?
+  delivery        Boolean     @default(false)
+  address         String?
+  notes           String?
+  estimatedTime   Int?        // Minutos estimados para entrega
+  actualTime      Int?        // Minutos reales
+  ip              String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  chat            Chat?
+  incidences      Incidence[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id             String   @id @default(cuid())
+  cartId         String
+  cart           Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id])
+  quantity       Int
+  customizations String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model FraudAttempt {
+  id        String   @id @default(cuid())
+  userId    String?
+  ip        String?
+  phone     String?
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+// ==================== ESTADO DE COCINA ====================
+
+model KitchenState {
+  id                 String   @id @default(cuid())
+  status             String   @default("OPEN") // OPEN, SATURATED, CLOSED
+  message            String?
+  estimatedWaitTime  Int?     // minutos
+  lastUpdatedBy      String?  // userId del admin que hizo el cambio
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+}
+
+// ==================== ZARDAS (FIDELIZACIÓN) ====================
+
+model ZardasTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Int      // puntos (positivo o negativo)
+  type        String   // ZARDAS_COMPENSATION, BIRTHDAY_BONUS, LOYALTY_MILESTONE, REFERRAL_BONUS, MANUAL
+  reason      String
+  orderId     String?  // Si está relacionado a un pedido
+  expiresAt   DateTime? // Si los zardas expiran
+  createdBy   String?  // userId del admin si es manual
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([orderId])
+}
+
+model ZardasBalance {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  total     Int      @default(0)
+  available Int      @default(0)
+  pending   Int      @default(0)
+  expired   Int      @default(0)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+// ==================== INCIDENCIAS ====================
+
+model Incidence {
+  id          String   @id @default(cuid())
+  orderId     String
+  userId      String
+  type        String   // ORDER_LATE, WRONG_ORDER, QUALITY_ISSUE, MISSING_ITEM, OTHER
+  description String?
+  resolved    Boolean  @default(false)
+  resolution  String?
+  resolvedBy  String?  // userId del admin
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([resolved])
+}
+
+// ==================== EVENTO LOG (AUDITORIA) ====================
+
+model EventLog {
+  id          String   @id @default(cuid())
+  type        String   // ORDER_CREATED, ORDER_CONFIRMED, PAYMENT_SUCCEEDED, etc.
+  aggregate   String   // ORDER, PRODUCT, USER, RESTAURANT, etc.
+  aggregateId String   // ID del recurso afectado
+  userId      String?  // Usuario que causó el evento
+  data        String   // JSON con detalles del evento
+  metadata    String?  // JSON con datos adicionales
+  createdAt   DateTime @default(now())
+
+  @@index([type])
+  @@index([aggregateId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ==================== REPORTES ====================
+
+enum ReportType {
+  DAILY_SALES
+  WEEKLY_SALES
+  MONTHLY_SALES
+  YEARLY_SALES
+  HOURLY_ANALYSIS
+}
+
+model DailySalesReport {
+  id                String   @id @default(cuid())
+  date              DateTime @unique
+  totalOrders       Int      @default(0)
+  totalSales        Float    @default(0)
+  averageOrderValue Float    @default(0)
+  paymentMethods    String   // JSON: { "CARD": 100, "CASH": 50, ... }
+  topProducts       String   // JSON: [ { productId, name, quantity }, ... ]
+  peakHour          Int?     // Hora (0-23) con más órdenes
+  incidences        Int      @default(0)
+  generatedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model MonthlySalesReport {
+  id                String   @id @default(cuid())
+  year              Int
+  month             Int      // 1-12
+  totalOrders       Int      @default(0)
+  totalSales        Float    @default(0)
+  averageOrderValue Float    @default(0)
+  dailyBreakdown    String   // JSON con métricas por día
+  weeklyBreakdown   String?  // JSON con métricas por semana
+  bestDay           DateTime?
+  worstDay          DateTime?
+  generatedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([year, month])
+}
+
+// ==================== PREDICCIONES ====================
+
+model SalesPrediction {
+  id                String   @id @default(cuid())
+  date              DateTime
+  dayOfWeek         Int      // 0-6
+  shift             Int      // 1=COMIDA, 2=CENA
+  estimatedOrders   Int
+  estimatedSales    Float
+  confidence        Float    // 0-1
+  reasoning         String?  // Explicación del cálculo
+  actualOrders      Int?     // Llenado después del día
+  actualSales       Float?
+  accuracy          Float?   // % de precisión
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([date])
+  @@index([dayOfWeek])
+}
+
+// ==================== FAVORITOS Y PREFERENCIAS ====================
+
+model UserFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  customizations String? // Personalizaciones guardadas
+  notes     String?  // Notas persistentes del cliente
+  addedAt   DateTime @default(now())
+  lastUsed  DateTime?
+  timesUsed Int      @default(0)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+// ==================== DIRECCIONES GUARDADAS ====================
+
+model SavedAddress {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String   // "Casa", "Trabajo", etc.
+  street    String
+  number    String
+  floor     String?
+  city      String
+  postalCode String
+  notes     String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ScheduleWindow {
+  id         String   @id @default(cuid())
+  dayOfWeek  Int
+  shift      Int      @default(1)
+  openTime   String
+  closeTime  String
+  active     Boolean  @default(true)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SpecialSchedule {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  openTime  String?
+  closeTime String?
+  isClosed  Boolean  @default(false)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model OrderItem {
-  id           String     @id @default(cuid())
-  orderId      String
-  order        Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId    String
-  product      Product    @relation(fields: [productId], references: [id])
-  quantity     Int
-  customizations String?  // JSON string for custom ingredients
+  id             String      @id @default(cuid())
+  orderId        String
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product     @relation(fields: [productId], references: [id])
+  quantity       Int
+  price          Float       // Precio al momento del pedido
+  subtotal       Float       // price * quantity
+  customizations String?     // JSON string con personalizaciones
+  createdAt      DateTime    @default(now())
+
+  @@index([orderId])
 }
 
 model Review {
@@ -78,6 +365,8 @@ model Review {
   user      User     @relation(fields: [userId], references: [id])
   rating    Int
   comment   String?
+  response  String?
+  hidden    Boolean  @default(false)
   createdAt DateTime @default(now())
 }
 

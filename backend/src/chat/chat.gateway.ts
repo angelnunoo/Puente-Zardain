@@ -1,13 +1,34 @@
-import { WebSocketGateway, SubscribeMessage, MessageBody } from '@nestjs/websockets';
+import { WebSocketGateway, SubscribeMessage, MessageBody, WebSocketServer, ConnectedSocket } from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
+import { EventBusService } from '../common/events/event-bus.service';
 
-@WebSocketGateway()
+@WebSocketGateway({ cors: { origin: '*' } })
 export class ChatGateway {
-  constructor(private chatService: ChatService) {}
+  @WebSocketServer()
+  server: Server;
+
+  constructor(private chatService: ChatService, private eventBus: EventBusService) {
+    this.eventBus.on('OrderStatusChanged', this.handleOrderStatusChanged.bind(this));
+  }
+
+  @SubscribeMessage('joinRoom')
+  handleJoin(
+    @MessageBody() data: { orderId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.join(data.orderId);
+    client.emit('joined', { orderId: data.orderId });
+  }
 
   @SubscribeMessage('sendMessage')
-  handleMessage(@MessageBody() data: { orderId: string; sender: string; content: string }) {
-    this.chatService.saveMessage(data);
-    // Emit to room
+  async handleMessage(@MessageBody() data: { orderId: string; sender: string; content: string }) {
+    const message = await this.chatService.saveMessage(data);
+    this.server.to(data.orderId).emit('newMessage', message);
+    return message;
+  }
+
+  private handleOrderStatusChanged(payload: { orderId: string; previousStatus: string; newStatus: string }) {
+    this.server.to(payload.orderId).emit('orderStatusUpdated', payload);
   }
 }

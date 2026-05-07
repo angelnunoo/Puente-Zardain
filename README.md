@@ -4,7 +4,7 @@ Plataforma web completa para el restaurante Puente de Zardain, permitiendo pedid
 
 ## Stack Tecnológico
 
-- **Frontend**: Next.js 14 + React + TypeScript + Tailwind CSS
+- **Frontend**: Next.js 13 + React + TypeScript + Tailwind CSS
 - **Backend**: NestJS + TypeScript
 - **Base de Datos**: PostgreSQL + Prisma ORM
 - **Tiempo Real**: Socket.IO
@@ -21,14 +21,17 @@ Plataforma web completa para el restaurante Puente de Zardain, permitiendo pedid
 ## Instalación
 
 1. Clona el repositorio (o usa la estructura creada).
-2. Instala dependencias:
+2. Instala dependencias en el monorepo:
 
    ```bash
-   cd frontend
-   npm install
+   npm run bootstrap
+   ```
 
-   cd ../backend
-   npm install
+   O bien instala individualmente:
+
+   ```bash
+   cd frontend && npm install
+   cd ../backend && npm install
    ```
 
 3. Configura la base de datos:

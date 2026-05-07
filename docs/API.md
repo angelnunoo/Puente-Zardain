@@ -150,6 +150,17 @@ socket.on('newMessage', (message) => {
 });
 ```
 
+#### Recibir actualizaciones de estado de pedido
+```javascript
+socket.on('orderStatusUpdated', (payload) => {
+  console.log('Estado del pedido actualizado', payload);
+});
+```
+
+#### REST Chat Endpoints
+- `GET /chat/history/:orderId` - historial de mensajes del pedido (requiere JWT)
+- `GET /chat/quick-replies` - respuestas rápidas del restaurante (requiere JWT)
+
 ---
 
 ### Reseñas (`/reviews`)

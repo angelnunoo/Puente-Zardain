@@ -1,26 +1,36 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/guards/roles.decorator';
+import { Role } from '../../../shared/enums';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private ordersService: OrdersService) {}
+  constructor(private readonly ordersService: OrdersService) {}
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() body) {
-    return this.ordersService.create(body);
+  create(@Req() req: any, @Body() payload: CreateOrderDto) {
+    const ip = req.ip || req.connection?.remoteAddress;
+    return this.ordersService.create(req.user.userId, payload, ip);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll() {
-    return this.ordersService.findAll();
+  findAll(@Req() req: any) {
+    return this.ordersService.findAll(req.user);
   }
-
-  @UseGuards(JwtAuthGuard)
+  @Get('estimate')
+  getEstimate() {
+    return this.ordersService.getEstimate();
+  }
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @Put(':id/status')
-  updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
-    return this.ordersService.updateStatus(id, body.status);
+  updateStatus(@Param('id') id: string, @Body() payload: UpdateOrderStatusDto) {
+    return this.ordersService.updateStatus(id, payload);
   }
 }

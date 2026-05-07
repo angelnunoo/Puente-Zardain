@@ -130,7 +130,7 @@ Admin → Users → [Usuario] → Bloquear
 ## Técnico
 
 ### Stack del Proyecto
-**Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
+**Frontend**: Next.js 13, React 18, TypeScript, Tailwind CSS
 **Backend**: NestJS 10, TypeScript, PostgreSQL, Prisma
 **Tiempo Real**: Socket.IO WebSockets
 **Auth**: JWT (JSON Web Tokens)
