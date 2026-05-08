@@ -1,79 +1,33 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ordersApi, productsApi, scheduleApi } from '../../lib/api'
-import { useCart } from '../../context/CartContext'
+import MenuSectionFixed from '../components/home/menu-section-fixed'
 
-interface Product {
-  id: string
-  name: string
-  price: number
-  ingredients: { name: string; required: boolean }[]
-}
-
-export default function Menu() {
-  const { addItem } = useCart()
-  const [products, setProducts] = useState<Product[]>([])
-  const [scheduleMessage, setScheduleMessage] = useState<string>('Cargando estado...')
-  const [isOpen, setIsOpen] = useState<boolean>(true)
-  const [estimateMessage, setEstimateMessage] = useState<string>('Calculando tiempos...')
-
-  useEffect(() => {
-    productsApi.getAll()
-      .then(setProducts)
-      .catch(() => setProducts([]))
-
-    scheduleApi.getPublicSchedule()
-      .then((schedule) => {
-        setIsOpen(schedule.status.open)
-        if (schedule.status.open) {
-          setScheduleMessage(schedule.status.reason)
-          ordersApi.getEstimate()
-            .then((estimate) => {
-              setEstimateMessage(`Tiempo estimado: ${estimate.estimatedMinutes} min · Cola: ${estimate.queueLength}`)
-            })
-            .catch(() => {
-              setEstimateMessage('No se pudo calcular el tiempo estimado.');
-            })
-        } else {
-          const next = schedule.status.nextOpen ? ` → Abre a las ${schedule.status.nextOpen}` : ''
-          setScheduleMessage(`${schedule.status.reason}${next}`)
-          setEstimateMessage('No hay servicio en este momento.')
-        }
-      })
-      .catch(() => {
-        setScheduleMessage('No se pudo cargar el horario.')
-        setEstimateMessage('No se pudo calcular el tiempo estimado.')
-      })
-  }, [])
-
+export default function MenuPage() {
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">Carta</h1>
-      <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-4">
-        <p className="font-semibold">Estado de servicio:</p>
-        <p className={isOpen ? 'text-green-700' : 'text-red-700'}>{scheduleMessage}</p>
-        <p className="mt-2 text-sm text-gray-600">{estimateMessage}</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {products.map(product => (
-          <div key={product.id} className="border p-4">
-            <h2 className="font-bold">{product.name}</h2>
-            <p>{product.price}€</p>
-            <ul>
-              {product.ingredients.map((ing, i) => (
-                <li key={i}>{ing.required ? '*' : ''}{ing.name}</li>
-              ))}
-            </ul>
-            <button
-              className="bg-green-500 text-white p-2 mt-2"
-              onClick={() => addItem({ productId: product.id, name: product.name, price: product.price })}
-            >
-              Añadir al carrito
-            </button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Nuestra Carta</h1>
+              <p className="text-sm text-gray-600">Los mejores platos de Puente de Zardain</p>
+            </div>
+            <div className="flex gap-2">
+              <a href="/cart" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+                🛒 Carrito
+                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full" id="cart-count">0</span>
+              </a>
+              <a href="/login" className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                🔐 Login
+              </a>
+            </div>
           </div>
-        ))}
+        </div>
       </div>
+
+      {/* Componente MenuSection con conexión real a APIs */}
+      <MenuSectionFixed />
     </div>
   )
 }

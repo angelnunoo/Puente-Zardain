@@ -40,6 +40,8 @@ export enum PaymentMethod {
   CARD = 'CARD',
   CASH = 'CASH',
   STRIPE = 'STRIPE',
+  PAYPAL = 'PAYPAL',
+  BIZUM = 'BIZUM',
 }
 
 // ==================== RESTAURANTE ====================

@@ -18,6 +18,10 @@ import { ZardasModule } from './zardas/zardas.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { CartModule } from './cart/cart.module';
 import { PaymentsModule } from './payments/payments.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { IncidentsModule } from './incidents/incidents.module';
+import { GamificationModule } from './gamification/gamification.module';
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 
 @Module({
@@ -36,6 +40,10 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
     ScheduleModule,
     CartModule,
     PaymentsModule,
+    NotificationsModule,
+    AnalyticsModule,
+    IncidentsModule,
+    GamificationModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -56,7 +56,14 @@ export class AuthService {
     const access_token = this.getAccessToken(user);
     const refresh_token = await this.createRefreshToken(user.id);
 
-    return { access_token, refresh_token };
+    // Devolver datos completos del usuario con rol
+    const { password: _, ...userWithoutPassword } = user;
+    
+    return { 
+      access_token, 
+      refresh_token,
+      user: userWithoutPassword
+    };
   }
 
   async createRefreshToken(userId: string) {

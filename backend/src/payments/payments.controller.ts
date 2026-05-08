@@ -1,29 +1,101 @@
-import { BadRequestException, Body, Controller, Headers, InternalServerErrorException, Post, Req, UseGuards } from '@nestjs/common';
+import { 
+  BadRequestException, 
+  Body, 
+  Controller, 
+  Headers, 
+  InternalServerErrorException, 
+  Post, 
+  Get, 
+  Req, 
+  UseGuards,
+  Param,
+  Query,
+  HttpStatus,
+  HttpCode
+} from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/guards/roles.decorator';
-import { Role } from '../../../shared/enums';
+import { Role, PaymentMethod } from '../../../shared/enums';
 
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  // ==================== MÉTODOS DE PAGO ====================
+
+  @Get('methods')
   @UseGuards(JwtAuthGuard)
-  @Post('intent')
-  async createIntent(@Req() req: any, @Body() body: { orderId: string }) {
+  async getAvailablePaymentMethods(@Query('amount') amount: string) {
+    const orderAmount = amount ? parseFloat(amount) : 0;
+    return this.paymentsService.getAvailablePaymentMethods(orderAmount);
+  }
+
+  @Post('stripe/intent')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createStripeIntent(@Req() req: any, @Body() body: { orderId: string }) {
     return this.paymentsService.createPaymentIntent(body.orderId, req.user);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('refund')
-  async refund(@Body() body: { paymentIntentId: string }) {
-    return this.paymentsService.refundPayment(body.paymentIntentId);
+  @Post('paypal/create')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createPayPalPayment(@Req() req: any, @Body() body: { orderId: string }) {
+    return this.paymentsService.createPayPalPayment(body.orderId, req.user);
   }
 
-  @Post('webhook')
-  async webhook(@Req() req: any, @Headers('stripe-signature') signature: string) {
+  @Post('bizum/create')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createBizumPayment(@Req() req: any, @Body() body: { orderId: string }) {
+    return this.paymentsService.createBizumPayment(body.orderId, req.user);
+  }
+
+  @Post('cash/process')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async processCashPayment(@Req() req: any, @Body() body: { orderId: string }) {
+    return this.paymentsService.processCashPayment(body.orderId, req.user);
+  }
+
+  // ==================== REEMBOLSOS ====================
+
+  @Post('refund')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async refund(@Body() body: { paymentIntentId: string; reason?: string }) {
+    return this.paymentsService.refundPayment(body.paymentIntentId, body.reason);
+  }
+
+  // ==================== FACTURACIÓN ====================
+
+  @Post('invoices/generate/:orderId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async generateInvoice(@Param('orderId') orderId: string, @Req() req: any) {
+    return this.paymentsService.generateInvoice(orderId);
+  }
+
+  @Get('invoices')
+  @UseGuards(JwtAuthGuard)
+  async getInvoices(@Req() req: any) {
+    return this.paymentsService.getInvoices(req.user.userId);
+  }
+
+  @Get('invoices/:invoiceId')
+  @UseGuards(JwtAuthGuard)
+  async getInvoice(@Param('invoiceId') invoiceId: string) {
+    // Este endpoint podría devolver el PDF de la factura
+    return { message: 'Invoice PDF endpoint - to be implemented', invoiceId };
+  }
+
+  // ==================== WEBHOOKS ====================
+
+  @Post('stripe/webhook')
+  async stripeWebhook(@Req() req: any, @Headers('stripe-signature') signature: string) {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
       throw new InternalServerErrorException('Stripe webhook secret not configured');
@@ -33,5 +105,45 @@ export class PaymentsController {
     }
     const event = this.paymentsService.constructEvent(req.body, signature, webhookSecret);
     return this.paymentsService.handleWebhook(event);
+  }
+
+  @Post('paypal/webhook')
+  async paypalWebhook(@Req() req: any) {
+    // Webhook para PayPal - implementar según documentación de PayPal
+    return { received: true, message: 'PayPal webhook endpoint - to be implemented' };
+  }
+
+  @Post('bizum/webhook')
+  async bizumWebhook(@Req() req: any) {
+    // Webhook para Bizum - implementar según documentación de Bizum
+    return { received: true, message: 'Bizum webhook endpoint - to be implemented' };
+  }
+
+  // ==================== MÉTRICAS ====================
+
+  @Get('stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getPaymentStats(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.paymentsService.getPaymentStats(start, end);
+  }
+
+  // ==================== UTILIDADES ====================
+
+  @Get('methods/fees')
+  @UseGuards(JwtAuthGuard)
+  async getPaymentFees() {
+    // Devuelve información de comisiones para cada método
+    return {
+      CARD: { fee: 0.029, fixed: 0.25, description: '2.9% + €0.25' },
+      PAYPAL: { fee: 0.034, fixed: 0, description: '3.4%' },
+      BIZUM: { fee: 0.015, fixed: 0, description: '1.5%' },
+      CASH: { fee: 0, fixed: 0, description: 'Sin comisión' },
+    };
   }
 }

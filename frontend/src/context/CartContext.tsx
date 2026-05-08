@@ -20,6 +20,9 @@ interface CartContextValue {
   clearCart: () => void
   total: number
   itemCount: number
+  checkout: (data: { deliveryAddress?: string; notes?: string }) => Promise<{ orderId: string; total: number }>
+  getOrders: () => Promise<any[]>
+  getOrder: (orderId: string) => Promise<any>
 }
 
 const CartContext = createContext<CartContextValue | undefined>(undefined)
@@ -155,6 +158,40 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       },
       clearCart() {
         setItems([])
+      },
+      async checkout(data: { deliveryAddress?: string; notes?: string }) {
+        const { token } = useAuth()
+        if (!token) throw new Error('Authentication required')
+        
+        try {
+          const result = await cartApi.checkout(data, token)
+          setItems([])
+          return result
+        } catch (error) {
+          throw error
+        }
+      },
+      async getOrders() {
+        const { token } = useAuth()
+        if (!token) return []
+        
+        try {
+          return await cartApi.getOrders(token)
+        } catch (error) {
+          console.error('Error fetching orders:', error)
+          return []
+        }
+      },
+      async getOrder(orderId: string) {
+        const { token } = useAuth()
+        if (!token) return null
+        
+        try {
+          return await cartApi.getOrder(orderId, token)
+        } catch (error) {
+          console.error('Error fetching order:', error)
+          return null
+        }
       },
       get total() {
         return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
