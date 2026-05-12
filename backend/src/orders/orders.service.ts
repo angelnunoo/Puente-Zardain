@@ -2,8 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { EventBusService } from '../common/events/event-bus.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { ZardasService } from '../zardas/zardas.service';
-import { OrderStatus, Role } from '../../../shared/enums';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { OrderStatus, Role, PaymentMethod } from '../../../shared/enums';
+import { CreateOrderDto, PreviewOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderDomain } from './domain/order.entity';
 import { OrdersRepository } from './orders.repository';
@@ -26,11 +26,8 @@ export class OrdersService {
     }
 
     if (payload.delivery && !this.validateDeliveryAddress(payload.address || '')) {
-      await this.logFraudAttempt({ userId, ip, reason: 'Dirección de entrega inválida' });
       throw new BadRequestException('Las entregas solo están disponibles para Arroyomolinos.');
     }
-
-    await this.assertOrderLimit(userId, ip);
 
     const itemIds = payload.items.map((item) => item.productId);
     const products = await this.ordersRepository.findProductsByIds(itemIds);
@@ -38,6 +35,11 @@ export class OrdersService {
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
     }
+
+    // Aplicar oferta si existe y validar canje
+    let discount = 0;
+    let offerId: string | undefined = undefined;
+    let offerNote: string | undefined = undefined;
 
     const priceMap = new Map(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
@@ -49,11 +51,42 @@ export class OrdersService {
 
     const deliveryFee = payload.delivery ? this.calculateDeliveryFee(subtotal) : 0;
     const tax = this.calculateTax(subtotal);
-    const total = subtotal + tax + deliveryFee;
+    const baseTotal = subtotal + tax + deliveryFee;
 
-    if (total > 250) {
-      await this.logFraudAttempt({ userId, ip, reason: 'Monto total excesivo' });
-      throw new BadRequestException('El monto del pedido supera el límite permitido.');
+    if (payload.offerId) {
+      const offer = await this.zardasService.getOffer(payload.offerId);
+      if (!offer.active) {
+        throw new BadRequestException('La oferta seleccionada no está disponible.');
+      }
+
+      const balance = await this.zardasService.getBalance(userId);
+      if (balance.available < offer.cost) {
+        throw new BadRequestException('Saldo de Zardas insuficiente');
+      }
+      if (offer.leagueMin && this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(offer.leagueMin)) {
+        throw new BadRequestException('No cumple la liga mínima para esta oferta');
+      }
+
+      offerId = offer.id;
+      if (offer.type === 'DESCUENTO_FIJO') {
+        discount = Number(Math.min(offer.value, baseTotal).toFixed(2));
+      } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
+        discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
+      } else if (offer.type === 'PRODUCTO_GRATIS') {
+        offerNote = `Oferta gratis aplicada: ${offer.name}`;
+      }
+    } else if (payload.redemption) {
+      const balance = await this.zardasService.getBalance(userId);
+      if (balance.available < payload.redemption.discountAmount) {
+        throw new BadRequestException('Saldo de Zardas insuficiente');
+      }
+      discount = payload.redemption.discountAmount;
+    }
+
+    const total = Number((baseTotal - discount).toFixed(2));
+
+    if (total < 15) {
+      throw new BadRequestException('El pedido mínimo es de 15 €.');
     }
 
     const order = await this.prisma.$transaction(async (tx) => {
@@ -71,11 +104,14 @@ export class OrdersService {
           tax,
           deliveryFee,
           total,
+          discount,
           delivery: payload.delivery,
           address: payload.address,
           paymentMethod: payload.paymentMethod,
           status: OrderStatus.PENDING,
           ip,
+          offerId,
+          notes: offerNote || undefined,
           items: {
             create: payload.items.map((item) => ({
               productId: item.productId,
@@ -105,11 +141,116 @@ export class OrdersService {
       return created;
     });
 
-    // Add Zardas for the order
-    const zardasEarned = Math.floor(total * 0.1); // 10% of order total as Zardas
-    await this.zardasService.addZardas(userId, zardasEarned, `Pedido ${order.id.slice(0, 8)}`);
+    // Redeem Zardas if applied via offer or old redemption path
+    if (payload.offerId) {
+      const offer = await this.zardasService.getOffer(payload.offerId);
+      await this.zardasService.redeemZardas(userId, offer.cost, `Canje de oferta ${offer.name} en pedido ${order.id.slice(0, 8)}`);
+    } else if (payload.redemption && discount > 0) {
+      await this.zardasService.redeemZardas(userId, discount, `Canje en pedido ${order.id.slice(0, 8)}`);
+    }
 
     return order;
+  }
+
+  async preview(userId: string, payload: PreviewOrderDto) {
+    if (payload.delivery && !payload.address) {
+      throw new BadRequestException('Delivery orders require an address.');
+    }
+
+    if (payload.delivery && !this.validateDeliveryAddress(payload.address || '')) {
+      throw new BadRequestException('Las entregas solo están disponibles para Arroyomolinos.');
+    }
+
+    const itemIds = payload.items.map((item) => item.productId);
+    const products = await this.ordersRepository.findProductsByIds(itemIds);
+
+    if (products.length !== itemIds.length) {
+      throw new BadRequestException('One or more products are invalid or unavailable');
+    }
+
+    let discount = 0;
+    let offer = null;
+    let offerId: string | undefined = undefined;
+    let offerNote: string | undefined = undefined;
+
+    const priceMap = new Map(products.map((product) => [product.id, product.price]));
+    const subtotal = OrderDomain.calculateTotal(
+      payload.items.map((item) => ({
+        quantity: item.quantity,
+        price: priceMap.get(item.productId) ?? 0,
+      })),
+    );
+
+    const deliveryFee = payload.delivery ? this.calculateDeliveryFee(subtotal) : 0;
+    const tax = this.calculateTax(subtotal);
+    const baseTotal = subtotal + tax + deliveryFee;
+
+    if (payload.offerId) {
+      offer = await this.zardasService.getOffer(payload.offerId);
+      if (!offer.active) {
+        throw new BadRequestException('La oferta seleccionada no está disponible.');
+      }
+
+      const balance = await this.zardasService.getBalance(userId);
+      if (balance.available < offer.cost) {
+        throw new BadRequestException('Saldo de Zardas insuficiente');
+      }
+      if (offer.leagueMin && this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(offer.leagueMin)) {
+        throw new BadRequestException('No cumple la liga mínima para esta oferta');
+      }
+
+      offerId = offer.id;
+      if (offer.type === 'DESCUENTO_FIJO') {
+        discount = Number(Math.min(offer.value, baseTotal).toFixed(2));
+      } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
+        discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
+      } else if (offer.type === 'PRODUCTO_GRATIS') {
+        offerNote = `Oferta gratis aplicada: ${offer.name}`;
+      }
+    } else if (payload.redemption) {
+      const balance = await this.zardasService.getBalance(userId);
+      if (balance.available < payload.redemption.discountAmount) {
+        throw new BadRequestException('Saldo de Zardas insuficiente');
+      }
+      discount = payload.redemption.discountAmount;
+    }
+
+    const total = Number((baseTotal - discount).toFixed(2));
+
+    if (total < 15) {
+      throw new BadRequestException('El pedido mínimo es de 15 €.');
+    }
+
+    return {
+      items: payload.items.map((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        return {
+          productId: item.productId,
+          name: product?.name || 'Producto',
+          price: product?.price || 0,
+          quantity: item.quantity,
+          customizations: item.customizations,
+        };
+      }),
+      subtotal,
+      tax,
+      deliveryFee,
+      discount,
+      total,
+      delivery: payload.delivery,
+      address: payload.address,
+      offer: offer ? {
+        id: offer.id,
+        name: offer.name,
+        type: offer.type,
+        value: offer.value,
+        description: offer.description,
+        cost: offer.cost,
+        leagueMin: offer.leagueMin,
+      } : undefined,
+      offerNote,
+      redemption: payload.redemption ? { discountAmount: discount } : undefined,
+    };
   }
 
   private validateDeliveryAddress(address: string) {
@@ -200,6 +341,14 @@ export class OrdersService {
       previousStatus: order.status,
       newStatus: payload.status,
     });
+
+    if (payload.status === OrderStatus.READY && !order.zardasAwarded) {
+      const zardasEarned = Math.floor(order.total / 5);
+      if (zardasEarned > 0) {
+        await this.zardasService.addZardas(order.userId, zardasEarned, `Pedido ${order.id.slice(0, 8)} completado`, 'ORDER_COMPLETION', order.id);
+        await this.prisma.order.update({ where: { id }, data: { zardasAwarded: true } });
+      }
+    }
 
     if (payload.status === OrderStatus.DELIVERED) {
       this.eventBus.emit('OrderDelivered', { orderId: id, userId: order.userId });

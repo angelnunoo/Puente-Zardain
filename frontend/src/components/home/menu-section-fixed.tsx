@@ -56,8 +56,10 @@ export default function MenuSectionFixed() {
         return;
       }
 
+      const customizations = prompt('¿Alguna personalización? (ej: sin cebolla, extra queso)', '') || '';
+
       const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
-      const existingItem = cartItems.find((item: any) => item.productId === product.id);
+      const existingItem = cartItems.find((item: any) => item.productId === product.id && item.customizations === customizations);
       
       if (existingItem) {
         existingItem.quantity += 1;
@@ -67,7 +69,8 @@ export default function MenuSectionFixed() {
           name: product.name,
           price: product.price,
           quantity: 1,
-          image: product.image
+          image: product.image,
+          customizations
         });
       }
       

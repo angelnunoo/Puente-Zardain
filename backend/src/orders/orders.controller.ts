@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/guards/roles.decorator';
 import { Role } from '../../../shared/enums';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateOrderDto, PreviewOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @Controller('orders')
@@ -23,10 +23,18 @@ export class OrdersController {
   findAll(@Req() req: any) {
     return this.ordersService.findAll(req.user);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('preview')
+  preview(@Req() req: any, @Body() payload: PreviewOrderDto) {
+    return this.ordersService.preview(req.user.userId, payload);
+  }
+
   @Get('estimate')
   getEstimate() {
     return this.ordersService.getEstimate();
   }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Put(':id/status')

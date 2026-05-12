@@ -75,6 +75,7 @@ model Order {
   subtotal        Float
   tax             Float       @default(0)
   deliveryFee     Float       @default(0)
+  discount        Float       @default(0)
   total           Float
   status          OrderStatus @default(PENDING)
   paymentMethod   String
@@ -86,6 +87,9 @@ model Order {
   estimatedTime   Int?        // Minutos estimados para entrega
   actualTime      Int?        // Minutos reales
   ip              String?
+  zardasAwarded   Boolean     @default(false)
+  offerId         String?
+  offer           ZardasOffer? @relation(fields: [offerId], references: [id])
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   chat            Chat?
@@ -182,8 +186,28 @@ model ZardasBalance {
   available Int      @default(0)
   pending   Int      @default(0)
   expired   Int      @default(0)
+  league    String   @default("Novato")
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
+}
+
+model ZardasOffer {
+  id         String    @id @default(cuid())
+  name       String
+  cost       Int
+  type       OfferType
+  value      Float
+  description String?
+  leagueMin  String?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+enum OfferType {
+  DESCUENTO_FIJO
+  DESCUENTO_PORCENTAJE
+  PRODUCTO_GRATIS
 }
 
 // ==================== INCIDENCIAS ====================

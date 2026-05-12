@@ -16,6 +16,7 @@ export default function Admin() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/orders" className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">Pedidos</Link>
+          <Link href="/admin/zardas" className="rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700">Zardas</Link>
           <Link href="/admin/products" className="rounded bg-gray-800 px-4 py-2 text-white hover:bg-gray-900">Productos</Link>
           <Link href="/admin/schedule" className="rounded bg-gray-800 px-4 py-2 text-white hover:bg-gray-900">Horarios</Link>
         </div>

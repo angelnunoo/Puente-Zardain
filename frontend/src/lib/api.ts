@@ -84,6 +84,12 @@ export const ordersApi = {
       body: JSON.stringify(payload),
     });
   },
+  previewOrder(token: string | null, payload: any) {
+    return authorizedRequest<any>(token, '/orders/preview', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
   getEstimate() {
     return request<{ queueLength: number; estimatedMinutes: number; averageDelivered: number }>('/orders/estimate', {
       method: 'GET',
@@ -498,13 +504,16 @@ export const incidentsApi = {
 };
 
 export const zardasApi = {
-  getZardas(token: string | null, userId: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}`, { method: 'GET' });
+  getBalance(token: string | null, userId: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/balance`, { method: 'GET' });
   },
-  addZardas(token: string | null, userId: string, amount: number, reason: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}/add`, {
+  getHistory(token: string | null, userId: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/history`, { method: 'GET' });
+  },
+  redeemZardas(token: string | null, userId: string, discountAmount: number, reason: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/redeem`, {
       method: 'POST',
-      body: JSON.stringify({ amount, reason }),
+      body: JSON.stringify({ discountAmount, reason }),
     });
   },
 };

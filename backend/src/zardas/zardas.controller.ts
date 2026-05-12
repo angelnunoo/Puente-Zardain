@@ -1,61 +1,36 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { ZardasService } from './zardas.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/guards/roles.decorator';
+import { Role } from '../../../shared/enums';
 
 @Controller('zardas')
 export class ZardasController {
   constructor(private zardasService: ZardasService) {}
 
   @UseGuards(JwtAuthGuard)
-  @Get(':userId')
-  getZardas(@Param('userId') userId: string) {
-    return this.zardasService.getZardas(userId);
+  @Get(':userId/balance')
+  getBalance(@Param('userId') userId: string) {
+    return this.zardasService.getBalance(userId);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':userId/add')
-  addZardas(@Param('userId') userId: string, @Body() body: { amount: number; reason: string }) {
-    return this.zardasService.addZardas(userId, body.amount, body.reason);
+  @Get(':userId/history')
+  getHistory(@Param('userId') userId: string) {
+    return this.zardasService.getHistory(userId);
   }
 
-  @Get('loyalty')
-  async getLoyaltyData() {
-    // Simular datos de lealtad Zardas
-    const loyaltyData = {
-      current: 245,
-      totalEarned: 1250,
-      currentLeague: 'Plata',
-      nextLeague: 'Oro',
-      zardasToNextLeague: 255,
-      currentReward: {
-        id: 'reward-1',
-        name: 'Hamburguesa Gratis',
-        description: 'Canjea una hamburguesa clásica gratis',
-        zardasNeeded: 300,
-        isAvailable: false
-      },
-      recentActivity: [
-        {
-          id: 'activity-1',
-          description: 'Pedido #1234 completado',
-          zardas: 25,
-          date: new Date(Date.now() - 86400000).toISOString() // Ayer
-        },
-        {
-          id: 'activity-2',
-          description: 'Pedido #1233 completado',
-          zardas: 18,
-          date: new Date(Date.now() - 172800000).toISOString() // Hace 2 días
-        },
-        {
-          id: 'activity-3',
-          description: 'Registro en el programa',
-          zardas: 50,
-          date: new Date(Date.now() - 604800000).toISOString() // Hace 1 semana
-        }
-      ]
-    };
+  @UseGuards(JwtAuthGuard)
+  @Post(':userId/redeem')
+  redeemZardas(@Param('userId') userId: string, @Body() body: { discountAmount: number; reason: string }) {
+    return this.zardasService.redeemZardas(userId, body.discountAmount, body.reason);
+  }
 
-    return loyaltyData;
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post(':userId/adjust')
+  adjustZardas(@Param('userId') userId: string, @Body() body: { amount: number; reason: string }, @Req() req: any) {
+    return this.zardasService.adjustZardas(userId, body.amount, body.reason, req.user.userId);
   }
 }

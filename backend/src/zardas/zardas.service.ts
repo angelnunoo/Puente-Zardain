@@ -25,29 +25,95 @@ export class ZardasService {
     }
   }
 
-  async addZardas(userId: string, amount: number, reason: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return null;
-    }
+  async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // Crear transacción
+      await tx.zardasTransaction.create({
+        data: {
+          userId,
+          amount,
+          type,
+          reason,
+          orderId,
+          createdBy,
+        },
+      });
 
-    const updatedZardas = user.zardas + amount;
-    const league = this.calculateLeague(updatedZardas);
+      // Actualizar balance
+      const balance = await tx.zardasBalance.upsert({
+        where: { userId },
+        update: { total: { increment: amount }, available: { increment: amount } },
+        create: { userId, total: amount, available: amount },
+      });
 
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { zardas: updatedZardas, league },
+      // Actualizar user.zardas para compatibilidad
+      await tx.user.update({
+        where: { id: userId },
+        data: { zardas: balance.total },
+      });
+
+      return balance;
     });
   }
 
-  async getZardas(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const zardas = user?.zardas || 0;
-    const league = user?.league || this.calculateLeague(zardas);
+  async getBalance(userId: string) {
+    const balance = await this.prisma.zardasBalance.findUnique({ where: { userId } });
+    const zardas = balance?.available || 0;
+    const league = this.calculateLeague(zardas);
     return {
       zardas,
       league,
       multiplier: this.getMultiplier(league),
+      total: balance?.total || 0,
+      available: balance?.available || 0,
+      pending: balance?.pending || 0,
+      expired: balance?.expired || 0,
+    };
+  }
+
+  async getHistory(userId: string) {
+    return this.prisma.zardasTransaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async redeemZardas(userId: string, discountAmount: number, reason: string) {
+    const balance = await this.prisma.zardasBalance.findUnique({ where: { userId } });
+    if (!balance || balance.available < discountAmount) {
+      throw new Error('Saldo insuficiente');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Crear transacción negativa
+      await tx.zardasTransaction.create({
+        data: {
+          userId,
+          amount: -discountAmount,
+          type: 'REDEMPTION',
+          reason,
+        },
+      });
+
+      // Actualizar balance
+      const updatedBalance = await tx.zardasBalance.update({
+        where: { userId },
+        data: { available: { decrement: discountAmount } },
+      });
+
+      // Actualizar user.zardas
+      await tx.user.update({
+        where: { id: userId },
+        data: { zardas: updatedBalance.available },
+      });
+
+      return updatedBalance;
+    });
+  }
+
+  async adjustZardas(userId: string, amount: number, reason: string, adminId: string) {
+    return this.addZardas(userId, amount, reason, 'MANUAL_ADJUSTMENT', undefined, adminId);
+  }
     };
   }
 }

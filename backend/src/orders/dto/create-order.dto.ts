@@ -15,6 +15,34 @@ export class OrderItemDto {
   customizations?: string;
 }
 
+export class RedemptionDto {
+  @IsPositive()
+  discountAmount: number;
+}
+
+export class PreviewOrderDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemDto)
+  items: OrderItemDto[];
+
+  @IsBoolean()
+  delivery: boolean;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  offerId?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RedemptionDto)
+  redemption?: RedemptionDto;
+}
+
 export class CreateOrderDto {
   @IsArray()
   @ValidateNested({ each: true })
@@ -30,4 +58,9 @@ export class CreateOrderDto {
 
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RedemptionDto)
+  redemption?: RedemptionDto;
 }
