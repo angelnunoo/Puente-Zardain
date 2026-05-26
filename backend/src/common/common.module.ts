@@ -10,9 +10,11 @@ import { AppLogger } from './logger/app-logger.service';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import { RoleGuard } from './guards/role.guard';
 import { AppValidationPipe } from './pipes/validation.pipe';
+import { ZardasModule } from '../zardas/zardas.module';
 
 @Global()
 @Module({
+  imports: [ZardasModule],
   providers: [
     EventBusService,
     OrderEventsService,

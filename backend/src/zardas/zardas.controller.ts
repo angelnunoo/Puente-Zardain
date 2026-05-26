@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { ZardasService } from './zardas.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -11,19 +11,22 @@ export class ZardasController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':userId/balance')
-  getBalance(@Param('userId') userId: string) {
+  getBalance(@Param('userId') userId: string, @Req() req: any) {
+    this.assertOwnerOrAdmin(req.user, userId);
     return this.zardasService.getBalance(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':userId/history')
-  getHistory(@Param('userId') userId: string) {
+  getHistory(@Param('userId') userId: string, @Req() req: any) {
+    this.assertOwnerOrAdmin(req.user, userId);
     return this.zardasService.getHistory(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':userId/redeem')
-  redeemZardas(@Param('userId') userId: string, @Body() body: { discountAmount: number; reason: string }) {
+  redeemZardas(@Param('userId') userId: string, @Body() body: { discountAmount: number; reason: string }, @Req() req: any) {
+    this.assertOwnerOrAdmin(req.user, userId);
     return this.zardasService.redeemZardas(userId, body.discountAmount, body.reason);
   }
 
@@ -32,5 +35,12 @@ export class ZardasController {
   @Post(':userId/adjust')
   adjustZardas(@Param('userId') userId: string, @Body() body: { amount: number; reason: string }, @Req() req: any) {
     return this.zardasService.adjustZardas(userId, body.amount, body.reason, req.user.userId);
+  }
+
+  private assertOwnerOrAdmin(user: { userId?: string; role?: string }, targetUserId: string) {
+    if (user?.role === Role.ADMIN || user?.userId === targetUserId) {
+      return;
+    }
+    throw new ForbiddenException('No tienes permiso para acceder a estas Zardas');
   }
 }

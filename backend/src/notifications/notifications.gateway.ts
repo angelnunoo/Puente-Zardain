@@ -6,10 +6,9 @@ import {
   OnGatewayDisconnect,
   SubscribeMessage,
   MessageBody,
-  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 
 @WebSocketGateway({
   cors: {
@@ -33,11 +32,13 @@ export class NotificationsGateway {
   }
 
   @OnGatewayConnection()
-  handleConnection(client: ConnectedSocket) {
+  handleConnection(client: Socket & { userId?: string }) {
     this.logger.log(`Client connected: ${client.id}`);
     
     // Unir cliente a salas específicas
-    client.join(`user_${client.userId}`);
+    if (client.userId) {
+      client.join(`user_${client.userId}`);
+    }
     client.join('kitchen_updates');
     client.join('order_updates');
     
@@ -49,7 +50,7 @@ export class NotificationsGateway {
   }
 
   @OnGatewayDisconnect()
-  handleDisconnect(client: ConnectedSocket) {
+  handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
@@ -57,7 +58,7 @@ export class NotificationsGateway {
 
   @SubscribeMessage('order_status_update')
   handleOrderStatusUpdate(
-    client: ConnectedSocket,
+    client: Socket,
     @MessageBody() data: { orderId: string; status: string; message?: string },
   ) {
     this.logger.log(`Order status update: ${data.orderId} -> ${data.status}`);
@@ -81,7 +82,7 @@ export class NotificationsGateway {
 
   @SubscribeMessage('kitchen_status_update')
   handleKitchenStatusUpdate(
-    client: ConnectedSocket,
+    client: Socket,
     @MessageBody() data: { status: string; message?: string },
   ) {
     this.logger.log(`Kitchen status update: ${data.status}`);
@@ -98,7 +99,7 @@ export class NotificationsGateway {
 
   @SubscribeMessage('product_stock_update')
   handleProductStockUpdate(
-    client: ConnectedSocket,
+    client: Socket,
     @MessageBody() data: { productId: string; stock: number; productName: string },
   ) {
     this.logger.log(`Product stock update: ${data.productName} -> ${data.stock}`);
@@ -120,7 +121,7 @@ export class NotificationsGateway {
 
   @SubscribeMessage('broadcast_notification')
   handleBroadcastNotification(
-    client: ConnectedSocket,
+    client: Socket,
     @MessageBody() data: { 
       type: 'info' | 'warning' | 'error' | 'success';
       title: string;
