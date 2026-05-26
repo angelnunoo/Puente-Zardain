@@ -3,7 +3,8 @@
  * Módulo global con servicios compartidos, excepciones, guards, pipes y filtros
  */
 
-import { Global, Module, APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { EventBusService } from './events/event-bus.service';
 import { OrderEventsService } from './events/order-events.service';
 import { AppLogger } from './logger/app-logger.service';

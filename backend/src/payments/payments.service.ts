@@ -5,7 +5,7 @@ import { OrderStatus, PaymentMethod, Role } from '../../../shared/enums';
 import { NotificationsService } from '../notifications/notifications.service';
 import Stripe from 'stripe';
 
-interface PaymentMethodConfig {
+export interface PaymentMethodConfig {
   type: PaymentMethod;
   enabled: boolean;
   fee: number;

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { IncidenceType } from '../../../../shared/enums';
+import { IncidenceType } from '../../../shared/enums';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
