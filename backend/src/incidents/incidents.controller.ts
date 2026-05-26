@@ -5,6 +5,7 @@ import {
   Put, 
   Query, 
   Param, 
+  Req,
   Body, 
   UseGuards,
   BadRequestException
@@ -13,7 +14,7 @@ import { IncidentsService } from './incidents.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/guards/roles.decorator';
-import { Role, IncidenceType } from '../../../../shared/enums';
+import { Role, IncidenceType } from '../../../shared/enums';
 
 @Controller('incidents')
 export class IncidentsController {

@@ -3,8 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../common/events/event-bus.service';
 import { OrderStatus, PaymentMethod, Role } from '../../../shared/enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import Stripe from 'stripe';
 
-interface PaymentMethodConfig {
+export interface PaymentMethodConfig {
   type: PaymentMethod;
   enabled: boolean;
   fee: number;
@@ -37,6 +38,7 @@ interface InvoiceData {
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger('PaymentsService');
+  private readonly stripe: Stripe | null;
 
   // Configuración de métodos de pago
   private readonly paymentMethods: PaymentMethodConfig[] = [
@@ -60,7 +62,11 @@ export class PaymentsService {
     private readonly prisma: PrismaService, 
     private readonly eventBus: EventBusService,
     private readonly notificationsService: NotificationsService
-  ) {}
+  ) {
+    this.stripe = process.env.STRIPE_SECRET_KEY
+      ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' })
+      : null;
+  }
 
   // ==================== MÉTODOS DE PAGO ====================
 
@@ -109,48 +115,52 @@ export class PaymentsService {
       tax: order.tax,
       deliveryFee: order.deliveryFee,
       total: order.total,
-      paymentMethod: order.paymentMethod
+      paymentMethod: order.paymentMethod as PaymentMethod
     };
 
     // Generar número de factura
     const invoiceNumber = `INV-${new Date().getFullYear()}-${String(order.id).padStart(6, '0')}`;
-    
-    // Crear registro de factura
-    const invoice = await this.prisma.invoice.create({
-      data: {
-        orderId: order.id,
-        userId: order.userId,
-        invoiceNumber,
-        data: invoiceData,
-        pdfUrl: `/invoices/${invoiceNumber}.pdf`, // URL simulada
-        createdAt: new Date(),
-      }
-    });
 
     this.logger.log(`Invoice generated: ${invoiceNumber} for order ${orderId}`);
-    return invoice;
+    return {
+      id: invoiceNumber,
+      orderId: order.id,
+      userId: order.userId,
+      invoiceNumber,
+      data: invoiceData,
+      pdfUrl: `/invoices/${invoiceNumber}.pdf`,
+      createdAt: new Date(),
+    };
   }
 
   async getInvoices(userId: string) {
-    return this.prisma.invoice.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      include: {
-        order: {
-          select: {
-            id: true,
-            total: true,
-            status: true,
-            createdAt: true
-          }
-        }
-      }
+      select: {
+        id: true,
+        total: true,
+        status: true,
+        createdAt: true,
+      },
     });
+
+    return orders.map((order) => ({
+      id: `INV-${new Date(order.createdAt).getFullYear()}-${String(order.id).padStart(6, '0')}`,
+      orderId: order.id,
+      userId,
+      invoiceNumber: `INV-${new Date(order.createdAt).getFullYear()}-${String(order.id).padStart(6, '0')}`,
+      createdAt: order.createdAt,
+      order,
+    }));
   }
 
   // ==================== WEBHOOKS ====================
 
   constructEvent(payload: Buffer | string, signature: string, webhookSecret: string) {
+    if (!this.stripe) {
+      throw new InternalServerErrorException('Stripe client not configured');
+    }
     try {
       return this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
     } catch (error) {
@@ -190,7 +200,6 @@ export class PaymentsService {
       data: {
         paymentStatus: 'SUCCEEDED',
         status: order.status === OrderStatus.PENDING ? OrderStatus.CONFIRMED : order.status,
-        paidAt: new Date(),
       },
     });
 

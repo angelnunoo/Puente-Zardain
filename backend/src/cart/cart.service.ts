@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCartDto } from './dto/update-cart.dto';
 import { AddToCartDto } from './dto/add-to-cart.dto';
+import { OrderStatus, PaymentMethod } from '../../../shared/enums';
 
 @Injectable()
 export class CartService {
@@ -95,19 +96,26 @@ export class CartService {
       throw new Error('Cart is empty');
     }
 
+    const subtotal = cart.items.reduce((sum, item) => sum + item.quantity * item.product.price, 0);
+
     // Create order
     const order = await this.prisma.order.create({
       data: {
         userId,
-        total: cart.items.reduce((sum, item) => sum + item.quantity * item.product.price, 0),
-        status: 'pending',
-        deliveryAddress: payload.deliveryAddress,
+        subtotal,
+        tax: 0,
+        deliveryFee: 0,
+        total: subtotal,
+        status: OrderStatus.PENDING,
+        address: payload.deliveryAddress,
         notes: payload.notes,
+        paymentMethod: PaymentMethod.CASH,
         items: {
           create: cart.items.map(item => ({
             productId: item.productId,
             quantity: item.quantity,
             price: item.product.price,
+            subtotal: Number((item.product.price * item.quantity).toFixed(2)),
             customizations: item.customizations,
           })),
         },

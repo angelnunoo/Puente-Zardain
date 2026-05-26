@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ReportPeriod } from '../../../../shared/enums';
+import { ReportPeriod } from '../../../shared/enums';
 
 @Injectable()
 export class AnalyticsService {
@@ -598,7 +598,7 @@ export class AnalyticsService {
     const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
     const totalCost = orders.reduce((sum, order) => {
       return sum + order.items.reduce((itemSum, item) => {
-        return itemSum + (item.product.cost || 0) * item.quantity;
+        return itemSum + (item.product.price || 0) * item.quantity;
       }, 0);
     }, 0);
 

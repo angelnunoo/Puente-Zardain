@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
-import { PaymentMethod } from '../../../shared/enums';
+import { PaymentMethod } from '../../../../shared/enums';
 
 export class OrderItemDto {
   @IsString()
@@ -55,6 +55,10 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsString()
+  offerId?: string;
 
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;

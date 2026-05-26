@@ -6,7 +6,7 @@ import { EventBusService } from '../common/events/event-bus.service';
 @WebSocketGateway({ cors: { origin: '*' } })
 export class ChatGateway {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   constructor(private chatService: ChatService, private eventBus: EventBusService) {
     this.eventBus.on('OrderStatusChanged', this.handleOrderStatusChanged.bind(this));
@@ -28,7 +28,7 @@ export class ChatGateway {
     return message;
   }
 
-  private handleOrderStatusChanged(payload: { orderId: string; previousStatus: string; newStatus: string }) {
+  private handleOrderStatusChanged(payload: any) {
     this.server.to(payload.orderId).emit('orderStatusUpdated', payload);
   }
 }

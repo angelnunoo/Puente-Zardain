@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, OrderStatus } from '../../../shared/enums';
 
@@ -9,6 +9,9 @@ export class OrdersRepository {
   async findAllForUser(userId: string, role: Role) {
     if (role === Role.ADMIN) {
       return this.prisma.order.findMany({ include: { items: true, user: true } });
+    }
+    if (!userId) {
+      throw new BadRequestException('User id is required to list orders');
     }
     return this.prisma.order.findMany({ where: { userId }, include: { items: true, user: true } });
   }

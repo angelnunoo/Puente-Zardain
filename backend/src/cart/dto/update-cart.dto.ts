@@ -1,10 +1,6 @@
-import { IsArray, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-import { CartItemDto } from './cart-item.dto';
+import { IsPositive } from 'class-validator';
 
 export class UpdateCartDto {
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CartItemDto)
-  items: CartItemDto[];
+  @IsPositive()
+  quantity: number;
 }
