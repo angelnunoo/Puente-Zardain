@@ -4,7 +4,7 @@
  */
 
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { ErrorCode } from '../../../shared/enums';
+import { ErrorCode } from '../../../../shared/enums';
 
 /**
  * Clase base para todas las excepciones de la aplicación

@@ -16,9 +16,9 @@ import { Server, Socket } from 'socket.io';
     credentials: true,
   },
 })
-export class NotificationsGateway {
+export class NotificationsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private logger: Logger = new Logger('NotificationsGateway');
 
@@ -26,12 +26,10 @@ export class NotificationsGateway {
     this.logger.log('NotificationsGateway initialized');
   }
 
-  @OnGatewayInit()
   afterInit(server: Server) {
     this.logger.log('WebSocket server initialized');
   }
 
-  @OnGatewayConnection()
   handleConnection(client: Socket & { userId?: string }) {
     this.logger.log(`Client connected: ${client.id}`);
     
@@ -49,7 +47,6 @@ export class NotificationsGateway {
     });
   }
 
-  @OnGatewayDisconnect()
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
   }

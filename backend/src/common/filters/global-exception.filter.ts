@@ -12,7 +12,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { AppException } from './app.exception';
+import { AppException } from '../exceptions/app.exception';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
