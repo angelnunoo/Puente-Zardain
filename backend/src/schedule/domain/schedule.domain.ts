@@ -29,7 +29,7 @@ export class ScheduleDomain {
   /**
    * Validates a special schedule
    */
-  static validateSpecialSchedule(schedule: Partial<ISpecialSchedule>): void {
+  static validateSpecialSchedule(schedule: Partial<Omit<ISpecialSchedule, 'date'> & { date: Date | string }>): void {
     if (schedule.date) {
       const date = new Date(schedule.date);
       if (isNaN(date.getTime())) {
