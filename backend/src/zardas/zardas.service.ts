@@ -26,7 +26,7 @@ export class ZardasService {
   }
 
   async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Crear transacción
       await tx.zardasTransaction.create({
         data: {
@@ -84,7 +84,7 @@ export class ZardasService {
       throw new Error('Saldo insuficiente');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Crear transacción negativa
       await tx.zardasTransaction.create({
         data: {
