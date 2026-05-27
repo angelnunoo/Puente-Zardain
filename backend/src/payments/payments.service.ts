@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../common/events/event-bus.service';
 import { OrderStatus, PaymentMethod, Role } from '../../../shared/enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import Stripe from 'stripe';
 
 interface PaymentMethodConfig {
   type: PaymentMethod;
@@ -37,6 +38,7 @@ interface InvoiceData {
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger('PaymentsService');
+  private readonly stripe?: Stripe;
 
   // Configuración de métodos de pago
   private readonly paymentMethods: PaymentMethodConfig[] = [
@@ -59,8 +61,13 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService, 
     private readonly eventBus: EventBusService,
-    private readonly notificationsService: NotificationsService
-  ) {}
+    private readonly notificationsService?: NotificationsService
+  ) {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (stripeSecretKey) {
+      this.stripe = new Stripe(stripeSecretKey, { apiVersion: '2022-11-15' });
+    }
+  }
 
   // ==================== MÉTODOS DE PAGO ====================
 
@@ -70,6 +77,39 @@ export class PaymentsService {
       amount >= method.minAmount && 
       amount <= method.maxAmount
     );
+  }
+
+  async createPaymentIntent(orderId: string, user: { userId: string; role: Role }) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Pedido no encontrado');
+    }
+
+    if (user.role !== Role.ADMIN && order.userId !== user.userId) {
+      throw new ForbiddenException('No tienes permiso para pagar este pedido.');
+    }
+
+    if (order.paymentMethod !== PaymentMethod.CARD && order.paymentMethod !== PaymentMethod.STRIPE) {
+      throw new BadRequestException('Este pedido no requiere pago con tarjeta.');
+    }
+
+    if (!this.stripe) {
+      throw new InternalServerErrorException('Stripe secret key not configured');
+    }
+
+    const paymentIntent = await this.stripe.paymentIntents.create({
+      amount: Math.round(order.total * 100),
+      currency: 'eur',
+      metadata: { orderId },
+      automatic_payment_methods: { enabled: true },
+    });
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { paymentIntentId: paymentIntent.id },
+    });
+
+    return { clientSecret: paymentIntent.client_secret };
   }
 
   // ==================== FACTURACIÓN ====================
@@ -151,6 +191,10 @@ export class PaymentsService {
   // ==================== WEBHOOKS ====================
 
   constructEvent(payload: Buffer | string, signature: string, webhookSecret: string) {
+    if (!this.stripe) {
+      throw new InternalServerErrorException('Stripe secret key not configured');
+    }
+
     try {
       return this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
     } catch (error) {
@@ -203,7 +247,7 @@ export class PaymentsService {
       newStatus: updated.status,
     });
 
-    this.notificationsService.sendOrderUpdate(
+    await this.notificationsService?.sendOrderUpdate(
       orderId,
       'CONFIRMED',
       '¡Pago exitoso! Tu pedido ha sido confirmado.',
@@ -223,7 +267,7 @@ export class PaymentsService {
       data: { paymentStatus: 'FAILED' },
     });
 
-    this.notificationsService.sendError(
+    await this.notificationsService?.sendError(
       'Pago Fallido',
       'No se pudo procesar tu pago. Por favor, intenta con otro método.',
       [order.userId]
@@ -241,7 +285,7 @@ export class PaymentsService {
 
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (order) {
-      this.notificationsService.sendOrderUpdate(
+      await this.notificationsService?.sendOrderUpdate(
         orderId,
         'REFUNDED',
         'Se ha procesado un reembolso para tu pedido.',

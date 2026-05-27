@@ -10,6 +10,11 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
+// Backend guards and services historically import Role. Keep it as an alias
+// so both shared API names resolve to the same runtime enum values.
+export const Role = UserRole;
+export type Role = UserRole;
+
 export enum UserLeague {
   BRONZE = 'BRONZE',
   SILVER = 'SILVER',

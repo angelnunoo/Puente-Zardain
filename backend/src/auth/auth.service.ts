@@ -100,7 +100,9 @@ export class AuthService {
   async requestPasswordReset(email: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      throw new BadRequestException('Usuario no encontrado');
+      return {
+        message: 'Si la cuenta existe, se han enviado instrucciones para restablecer la contraseña.',
+      };
     }
 
     const token = randomBytes(24).toString('hex');
@@ -110,8 +112,7 @@ export class AuthService {
     });
 
     return {
-      message: 'Token de recuperación generado. Úselo para resetear la contraseña.',
-      resetToken: token,
+      message: 'Si la cuenta existe, se han enviado instrucciones para restablecer la contraseña.',
     };
   }
 

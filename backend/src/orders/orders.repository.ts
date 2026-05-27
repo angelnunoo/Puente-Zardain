@@ -6,7 +6,7 @@ import { Role, OrderStatus } from '../../../shared/enums';
 export class OrdersRepository {
   constructor(private prisma: PrismaService) {}
 
-  async findAllForUser(userId: string, role: Role) {
+  async findAllForUser(userId: string | undefined, role: Role) {
     if (role === Role.ADMIN) {
       return this.prisma.order.findMany({ include: { items: true, user: true } });
     }

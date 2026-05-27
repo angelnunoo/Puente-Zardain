@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -114,6 +114,28 @@ export class ZardasService {
   async adjustZardas(userId: string, amount: number, reason: string, adminId: string) {
     return this.addZardas(userId, amount, reason, 'MANUAL_ADJUSTMENT', undefined, adminId);
   }
+
+  async getOffer(offerId: string) {
+    const offer = await this.prisma.zardasOffer.findUnique({ where: { id: offerId } });
+    if (!offer) {
+      throw new NotFoundException('Oferta no encontrada');
+    }
+    return offer;
+  }
+
+  getLeagueRank(league: string) {
+    const ranks: Record<string, number> = {
+      Novato: 0,
+      'Bronce Zarda': 1,
+      BRONZE: 1,
+      'Plata Zarda': 2,
+      SILVER: 2,
+      'Oro Zarda': 3,
+      GOLD: 3,
+      'Platino Zarda': 4,
+      PLATINUM: 4,
     };
+
+    return ranks[league] ?? 0;
   }
 }

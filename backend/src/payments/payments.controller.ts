@@ -30,6 +30,12 @@ export class PaymentsController {
     return this.paymentsService.getAvailablePaymentMethods(orderAmount);
   }
 
+  @Post('stripe/intent')
+  @UseGuards(JwtAuthGuard)
+  async createStripeIntent(@Body() body: { orderId: string }, @Req() req: any) {
+    return this.paymentsService.createPaymentIntent(body.orderId, req.user);
+  }
+
   @Post('invoices/generate/:orderId')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
@@ -42,6 +48,11 @@ export class PaymentsController {
   async getInvoices(@Req() req: any) {
     return this.paymentsService.getInvoices(req.user.userId);
   }
+
+  @Post('webhook')
+  async stripeWebhook(@Req() req: any, @Headers('stripe-signature') signature?: string) {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
       throw new InternalServerErrorException('Stripe webhook secret not configured');
     }
     if (!signature) {
