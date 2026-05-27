@@ -6,7 +6,7 @@ import { Role, OrderStatus } from '../../../shared/enums';
 export class OrdersRepository {
   constructor(private prisma: PrismaService) {}
 
-  async findAllForUser(userId: string, role: Role) {
+  async findAllForUser(userId: string | undefined, role: Role) {
     if (role === Role.ADMIN) {
       return this.prisma.order.findMany({ include: { items: true, user: true } });
     }
@@ -41,7 +41,7 @@ export class OrdersRepository {
       return 20;
     }
 
-    const totalMinutes = deliveries.reduce((sum, order) => {
+    const totalMinutes = deliveries.reduce((sum: number, order: { createdAt: Date; updatedAt: Date }) => {
       const delta = order.updatedAt.getTime() - order.createdAt.getTime();
       return sum + delta / 60000;
     }, 0);
