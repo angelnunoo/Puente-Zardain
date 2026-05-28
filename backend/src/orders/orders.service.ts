@@ -113,7 +113,7 @@ export class OrdersService {
       return quantities;
     }, new Map<string, number>());
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx: any) => {
       for (const [productId, quantity] of requestedQuantities) {
         const product = products.find((p) => p.id === productId);
         if (product && product.stock < quantity) {
@@ -411,7 +411,7 @@ export class OrdersService {
     if (payload.status === OrderStatus.READY && !order.zardasAwarded) {
       const zardasEarned = Math.floor(order.total / 5);
       if (zardasEarned > 0) {
-        await this.prisma.$transaction(async (tx) => {
+        await this.prisma.$transaction(async (tx: any) => {
           const awardClaim = await tx.order.updateMany({
             where: { id, zardasAwarded: false },
             data: { zardasAwarded: true },
