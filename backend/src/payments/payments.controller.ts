@@ -42,6 +42,11 @@ export class PaymentsController {
   async getInvoices(@Req() req: any) {
     return this.paymentsService.getInvoices(req.user.userId);
   }
+
+  @Post('webhook')
+  async stripeWebhook(@Req() req: any, @Headers('stripe-signature') signature?: string) {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
       throw new InternalServerErrorException('Stripe webhook secret not configured');
     }
     if (!signature) {
