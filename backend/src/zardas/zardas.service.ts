@@ -26,7 +26,7 @@ export class ZardasService {
   }
 
   async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Crear transacción
       await tx.zardasTransaction.create({
         data: {
@@ -83,7 +83,7 @@ export class ZardasService {
       throw new BadRequestException('La cantidad de Zardas debe ser un entero positivo');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       const balanceUpdate = await tx.zardasBalance.updateMany({
         where: { userId, available: { gte: discountAmount } },
         data: { available: { decrement: discountAmount } },
