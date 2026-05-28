@@ -9,6 +9,13 @@ import { OrderDomain } from './domain/order.entity';
 import { OrdersRepository } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
+type ProductForOrder = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+};
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -29,10 +36,13 @@ export class OrdersService {
       throw new BadRequestException('Las entregas solo están disponibles para Arroyomolinos.');
     }
 
-    const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    await this.assertOrderLimit(userId, ip);
 
-    if (products.length !== itemIds.length) {
+    const itemIds = payload.items.map((item) => item.productId);
+    const uniqueItemIds = [...new Set(itemIds)];
+    const products = (await this.ordersRepository.findProductsByIds(uniqueItemIds)) as ProductForOrder[];
+
+    if (products.length !== uniqueItemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
     }
 
@@ -40,8 +50,10 @@ export class OrdersService {
     let discount = 0;
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
+    let zardasToRedeem = 0;
+    let redemptionReason = '';
 
-    const priceMap = new Map(products.map((product) => [product.id, product.price]));
+    const priceMap = new Map<string, number>(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
       payload.items.map((item) => ({
         quantity: item.quantity,
@@ -68,6 +80,8 @@ export class OrdersService {
       }
 
       offerId = offer.id;
+      zardasToRedeem = offer.cost;
+      redemptionReason = `Canje de oferta ${offer.name}`;
       if (offer.type === 'DESCUENTO_FIJO') {
         discount = Number(Math.min(offer.value, baseTotal).toFixed(2));
       } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
@@ -76,11 +90,16 @@ export class OrdersService {
         offerNote = `Oferta gratis aplicada: ${offer.name}`;
       }
     } else if (payload.redemption) {
+      if (!Number.isInteger(payload.redemption.discountAmount) || payload.redemption.discountAmount <= 0) {
+        throw new BadRequestException('La cantidad de Zardas debe ser un entero positivo');
+      }
       const balance = await this.zardasService.getBalance(userId);
       if (balance.available < payload.redemption.discountAmount) {
         throw new BadRequestException('Saldo de Zardas insuficiente');
       }
       discount = payload.redemption.discountAmount;
+      zardasToRedeem = payload.redemption.discountAmount;
+      redemptionReason = 'Canje';
     }
 
     const total = Number((baseTotal - discount).toFixed(2));
@@ -89,10 +108,15 @@ export class OrdersService {
       throw new BadRequestException('El pedido mínimo es de 15 €.');
     }
 
+    const requestedQuantities = payload.items.reduce((quantities, item) => {
+      quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
+      return quantities;
+    }, new Map<string, number>());
+
     const order = await this.prisma.$transaction(async (tx) => {
-      for (const item of payload.items) {
-        const product = products.find((p) => p.id === item.productId);
-        if (product && product.stock < item.quantity) {
+      for (const [productId, quantity] of requestedQuantities) {
+        const product = products.find((p) => p.id === productId);
+        if (product && product.stock < quantity) {
           throw new BadRequestException(`No hay suficiente stock para ${product.name}`);
         }
       }
@@ -113,11 +137,16 @@ export class OrdersService {
           offerId,
           notes: offerNote || undefined,
           items: {
-            create: payload.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              customizations: item.customizations,
-            })),
+            create: payload.items.map((item) => {
+              const price = priceMap.get(item.productId) ?? 0;
+              return {
+                productId: item.productId,
+                quantity: item.quantity,
+                price,
+                subtotal: Number((price * item.quantity).toFixed(2)),
+                customizations: item.customizations,
+              };
+            }),
           },
         },
         include: {
@@ -126,10 +155,44 @@ export class OrdersService {
         },
       });
 
-      for (const item of payload.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } },
+      for (const [productId, quantity] of requestedQuantities) {
+        const stockUpdate = await tx.product.updateMany({
+          where: { id: productId, stock: { gte: quantity } },
+          data: { stock: { decrement: quantity } },
+        });
+        if (stockUpdate.count !== 1) {
+          const product = products.find((p) => p.id === productId);
+          throw new BadRequestException(`No hay suficiente stock para ${product?.name ?? 'el producto solicitado'}`);
+        }
+      }
+
+      if (zardasToRedeem > 0) {
+        const balanceUpdate = await tx.zardasBalance.updateMany({
+          where: { userId, available: { gte: zardasToRedeem } },
+          data: { available: { decrement: zardasToRedeem } },
+        });
+        if (balanceUpdate.count !== 1) {
+          throw new BadRequestException('Saldo de Zardas insuficiente');
+        }
+
+        const updatedBalance = await tx.zardasBalance.findUnique({ where: { userId } });
+        if (!updatedBalance) {
+          throw new BadRequestException('Saldo de Zardas insuficiente');
+        }
+
+        await tx.zardasTransaction.create({
+          data: {
+            userId,
+            amount: -zardasToRedeem,
+            type: 'REDEMPTION',
+            reason: `${redemptionReason} en pedido ${created.id.slice(0, 8)}`,
+            orderId: created.id,
+          },
+        });
+
+        await tx.user.update({
+          where: { id: userId },
+          data: { zardas: updatedBalance.available },
         });
       }
 
@@ -137,17 +200,10 @@ export class OrdersService {
         data: { orderId: created.id },
       });
 
-      this.eventBus.emit('OrderCreated', { orderId: created.id, userId, total });
       return created;
     });
 
-    // Redeem Zardas if applied via offer or old redemption path
-    if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      await this.zardasService.redeemZardas(userId, offer.cost, `Canje de oferta ${offer.name} en pedido ${order.id.slice(0, 8)}`);
-    } else if (payload.redemption && discount > 0) {
-      await this.zardasService.redeemZardas(userId, discount, `Canje en pedido ${order.id.slice(0, 8)}`);
-    }
+    this.eventBus.emit('OrderCreated', { orderId: order.id, userId, total });
 
     return order;
   }
@@ -162,9 +218,10 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const uniqueItemIds = [...new Set(itemIds)];
+    const products = (await this.ordersRepository.findProductsByIds(uniqueItemIds)) as ProductForOrder[];
 
-    if (products.length !== itemIds.length) {
+    if (products.length !== uniqueItemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
     }
 
@@ -173,7 +230,7 @@ export class OrdersService {
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
 
-    const priceMap = new Map(products.map((product) => [product.id, product.price]));
+    const priceMap = new Map<string, number>(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
       payload.items.map((item) => ({
         quantity: item.quantity,
@@ -208,6 +265,9 @@ export class OrdersService {
         offerNote = `Oferta gratis aplicada: ${offer.name}`;
       }
     } else if (payload.redemption) {
+      if (!Number.isInteger(payload.redemption.discountAmount) || payload.redemption.discountAmount <= 0) {
+        throw new BadRequestException('La cantidad de Zardas debe ser un entero positivo');
+      }
       const balance = await this.zardasService.getBalance(userId);
       if (balance.available < payload.redemption.discountAmount) {
         throw new BadRequestException('Saldo de Zardas insuficiente');
@@ -318,12 +378,18 @@ export class OrdersService {
     };
   }
 
-  async findAll(user: { id: string; role: string }) {
+  async findAll(user: { userId?: string; id?: string; role: string }) {
     if (!user) {
       throw new BadRequestException('User context is required to list orders');
     }
 
-    return this.ordersRepository.findAllForUser(user.id, user.role as Role);
+    const role = user.role as Role;
+    const userId = user.userId ?? user.id;
+    if (role !== Role.ADMIN && !userId) {
+      throw new BadRequestException('User context is required to list orders');
+    }
+
+    return this.ordersRepository.findAllForUser(userId, role);
   }
 
   async updateStatus(id: string, payload: UpdateOrderStatusDto) {
@@ -345,8 +411,34 @@ export class OrdersService {
     if (payload.status === OrderStatus.READY && !order.zardasAwarded) {
       const zardasEarned = Math.floor(order.total / 5);
       if (zardasEarned > 0) {
-        await this.zardasService.addZardas(order.userId, zardasEarned, `Pedido ${order.id.slice(0, 8)} completado`, 'ORDER_COMPLETION', order.id);
-        await this.prisma.order.update({ where: { id }, data: { zardasAwarded: true } });
+        await this.prisma.$transaction(async (tx) => {
+          const awardClaim = await tx.order.updateMany({
+            where: { id, zardasAwarded: false },
+            data: { zardasAwarded: true },
+          });
+          if (awardClaim.count !== 1) {
+            return;
+          }
+
+          await tx.zardasTransaction.create({
+            data: {
+              userId: order.userId,
+              amount: zardasEarned,
+              reason: `Pedido ${order.id.slice(0, 8)} completado`,
+              type: 'ORDER_COMPLETION',
+              orderId: order.id,
+            },
+          });
+          const balance = await tx.zardasBalance.upsert({
+            where: { userId: order.userId },
+            update: { total: { increment: zardasEarned }, available: { increment: zardasEarned } },
+            create: { userId: order.userId, total: zardasEarned, available: zardasEarned },
+          });
+          await tx.user.update({
+            where: { id: order.userId },
+            data: { zardas: balance.total },
+          });
+        });
       }
     }
 
