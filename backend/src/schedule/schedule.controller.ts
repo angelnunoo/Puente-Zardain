@@ -48,14 +48,14 @@ export class ScheduleController {
   @Roles(Role.ADMIN)
   @Post('special')
   createSpecial(@Body() payload: CreateSpecialScheduleDto) {
-    return this.scheduleService.createSpecial(payload);
+    return this.scheduleService.createSpecial(payload as any);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Put('special/:id')
   updateSpecial(@Param('id') id: string, @Body() payload: UpdateSpecialScheduleDto) {
-    return this.scheduleService.updateSpecial(id, payload);
+    return this.scheduleService.updateSpecial(id, payload as any);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentMethod } from '../../../shared/enums';
 
-interface PaymentMethodConfig {
+export interface PaymentMethodConfig {
   type: PaymentMethod;
   enabled: boolean;
   fee: number;
@@ -93,7 +93,7 @@ export class PaymentsService {
         email: order.user.email,
         phone: order.user.phone,
       },
-      items: order.items.map(item => ({
+      items: order.items.map((item: { product: { name: string }; quantity: number; price: number }) => ({
         name: item.product.name,
         quantity: item.quantity,
         unitPrice: item.price,
@@ -160,11 +160,12 @@ export class PaymentsService {
       }
     });
 
-    const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+    const totalRevenue = orders.reduce((sum: number, order: { total: number }) => sum + order.total, 0);
     const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
 
-    const paymentMethodStats = orders.reduce((stats, order) => {
-      stats[order.paymentMethod] = (stats[order.paymentMethod] || 0) + 1;
+    const paymentMethodStats = orders.reduce((stats: Record<PaymentMethod, number>, order: { paymentMethod: string }) => {
+      const method = order.paymentMethod as PaymentMethod;
+      stats[method] = (stats[method] || 0) + 1;
       return stats;
     }, {} as Record<PaymentMethod, number>);
 
