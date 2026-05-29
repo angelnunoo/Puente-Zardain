@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { EventBusService } from '../common/events/event-bus.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { ZardasService } from '../zardas/zardas.service';
-import { OrderStatus, Role, PaymentMethod } from '../../../shared/enums';
+import { OrderStatus, Role } from '../../../shared/enums';
 import { CreateOrderDto, PreviewOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderDomain } from './domain/order.entity';
@@ -40,6 +40,8 @@ export class OrdersService {
     let discount = 0;
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
+    let offerToRedeem: any;
+    let redemptionCost = 0;
 
     const priceMap = new Map(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
@@ -54,26 +56,27 @@ export class OrdersService {
     const baseTotal = subtotal + tax + deliveryFee;
 
     if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      if (!offer.active) {
+      offerToRedeem = await this.zardasService.getOffer(payload.offerId);
+      if (!offerToRedeem.active) {
         throw new BadRequestException('La oferta seleccionada no está disponible.');
       }
 
       const balance = await this.zardasService.getBalance(userId);
-      if (balance.available < offer.cost) {
+      if (balance.available < offerToRedeem.cost) {
         throw new BadRequestException('Saldo de Zardas insuficiente');
       }
-      if (offer.leagueMin && this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(offer.leagueMin)) {
+      if (offerToRedeem.leagueMin && this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(offerToRedeem.leagueMin)) {
         throw new BadRequestException('No cumple la liga mínima para esta oferta');
       }
 
-      offerId = offer.id;
-      if (offer.type === 'DESCUENTO_FIJO') {
-        discount = Number(Math.min(offer.value, baseTotal).toFixed(2));
-      } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
-        discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
-      } else if (offer.type === 'PRODUCTO_GRATIS') {
-        offerNote = `Oferta gratis aplicada: ${offer.name}`;
+      offerId = offerToRedeem.id;
+      redemptionCost = offerToRedeem.cost;
+      if (offerToRedeem.type === 'DESCUENTO_FIJO') {
+        discount = Number(Math.min(offerToRedeem.value, baseTotal).toFixed(2));
+      } else if (offerToRedeem.type === 'DESCUENTO_PORCENTAJE') {
+        discount = Number((baseTotal * (offerToRedeem.value / 100)).toFixed(2));
+      } else if (offerToRedeem.type === 'PRODUCTO_GRATIS') {
+        offerNote = `Oferta gratis aplicada: ${offerToRedeem.name}`;
       }
     } else if (payload.redemption) {
       const balance = await this.zardasService.getBalance(userId);
@@ -81,6 +84,7 @@ export class OrdersService {
         throw new BadRequestException('Saldo de Zardas insuficiente');
       }
       discount = payload.redemption.discountAmount;
+      redemptionCost = payload.redemption.discountAmount;
     }
 
     const total = Number((baseTotal - discount).toFixed(2));
@@ -116,6 +120,8 @@ export class OrdersService {
             create: payload.items.map((item) => ({
               productId: item.productId,
               quantity: item.quantity,
+              price: priceMap.get(item.productId) ?? 0,
+              subtotal: (priceMap.get(item.productId) ?? 0) * item.quantity,
               customizations: item.customizations,
             })),
           },
@@ -137,18 +143,28 @@ export class OrdersService {
         data: { orderId: created.id },
       });
 
-      this.eventBus.emit('OrderCreated', { orderId: created.id, userId, total });
+      if (offerToRedeem) {
+        await this.zardasService.redeemZardasInTransaction(
+          tx,
+          userId,
+          redemptionCost,
+          `Canje de oferta ${offerToRedeem.name} en pedido ${created.id.slice(0, 8)}`,
+          created.id,
+        );
+      } else if (payload.redemption && redemptionCost > 0) {
+        await this.zardasService.redeemZardasInTransaction(
+          tx,
+          userId,
+          redemptionCost,
+          `Canje en pedido ${created.id.slice(0, 8)}`,
+          created.id,
+        );
+      }
+
       return created;
     });
 
-    // Redeem Zardas if applied via offer or old redemption path
-    if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      await this.zardasService.redeemZardas(userId, offer.cost, `Canje de oferta ${offer.name} en pedido ${order.id.slice(0, 8)}`);
-    } else if (payload.redemption && discount > 0) {
-      await this.zardasService.redeemZardas(userId, discount, `Canje en pedido ${order.id.slice(0, 8)}`);
-    }
-
+    this.eventBus.emit('OrderCreated', { orderId: order.id, userId, total });
     return order;
   }
 
@@ -318,12 +334,17 @@ export class OrdersService {
     };
   }
 
-  async findAll(user: { id: string; role: string }) {
+  async findAll(user: { id?: string; userId?: string; role: string }) {
     if (!user) {
       throw new BadRequestException('User context is required to list orders');
     }
 
-    return this.ordersRepository.findAllForUser(user.id, user.role as Role);
+    const userId = user.userId || user.id;
+    if (!userId) {
+      throw new BadRequestException('User context is required to list orders');
+    }
+
+    return this.ordersRepository.findAllForUser(userId, user.role as Role);
   }
 
   async updateStatus(id: string, payload: UpdateOrderStatusDto) {

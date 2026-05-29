@@ -54,5 +54,5 @@ async function bootstrap() {
   logger.log(`🚀 Servidor iniciado en http://${host}:${port}${configService.apiPrefix}`);
   logger.log(`📝 Entorno: ${configService.nodeEnv.toUpperCase()}`);
 }
-}
+
 bootstrap();

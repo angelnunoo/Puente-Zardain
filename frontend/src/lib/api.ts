@@ -294,12 +294,109 @@ export const analyticsApi = {
       method: 'GET',
     });
   },
+  // Dashboard metrics
+  getDashboardMetrics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/dashboard${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+
+  // Sales reports
+  getSalesReport(token: string | null, period: string, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/sales/${period}${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+
+  // Customer analytics
+  getCustomerAnalytics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/customers${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+
+  // Product analytics
+  getProductAnalytics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/products${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+
+  // Financial analytics
+  getFinancialAnalytics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/financial${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+
+  // Export reports
+  exportReport(token: string | null, type: string, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/reports/export/${type}${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
 };
 
+function getUserIdFromToken(token: string | null) {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.sub || payload.userId || null;
+  } catch {
+    return null;
+  }
+}
+
 export const zardasApi = {
-  getLoyaltyData(token: string | null) {
-    return authorizedRequest(token, '/zardas/loyalty', {
-      method: 'GET',
+  async getLoyaltyData(token: string | null) {
+    const userId = getUserIdFromToken(token);
+    if (!userId) {
+      throw new Error('Autenticación requerida');
+    }
+
+    const [balance, history] = await Promise.all([
+      this.getBalance(token, userId),
+      this.getHistory(token, userId),
+    ]);
+    const leagueThresholds = [
+      { name: 'Bronce Zarda', min: 0 },
+      { name: 'Plata Zarda', min: 200 },
+      { name: 'Oro Zarda', min: 500 },
+      { name: 'Platino Zarda', min: 1000 },
+    ];
+    const nextLeague = leagueThresholds.find((league) => league.min > balance.available);
+
+    return {
+      current: balance.available,
+      totalEarned: balance.total,
+      currentLeague: balance.league,
+      nextLeague: nextLeague?.name || balance.league,
+      zardasToNextLeague: nextLeague ? nextLeague.min - balance.available : 0,
+      currentReward: {
+        id: 'discount-5',
+        name: '5 EUR de descuento',
+        description: 'Canjea 5 Zardas por 5 EUR de descuento',
+        zardasNeeded: 5,
+        isAvailable: balance.available >= 5,
+      },
+      recentActivity: history.map((item: any) => ({
+        id: item.id,
+        description: item.reason,
+        zardas: item.amount,
+        date: item.createdAt,
+      })),
+    };
+  },
+  getBalance(token: string | null, userId: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/balance`, { method: 'GET' });
+  },
+  getHistory(token: string | null, userId: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/history`, { method: 'GET' });
+  },
+  redeemZardas(token: string | null, userId: string, discountAmount: number, reason: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/redeem`, {
+      method: 'POST',
+      body: JSON.stringify({ discountAmount, reason }),
     });
   },
 };
@@ -397,53 +494,9 @@ export const paymentsApi = {
     });
   },
 
-  // Legacy method for compatibility
+  // Legacy method kept for callers that still expect createIntent.
   createIntent(token: string | null, orderId: string) {
     return this.createStripeIntent(token, orderId);
-  },
-};
-
-export const analyticsApi = {
-  // Dashboard metrics
-  getDashboardMetrics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/dashboard${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Sales reports
-  getSalesReport(token: string | null, period: string, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/sales/${period}${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Customer analytics
-  getCustomerAnalytics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/customers${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Product analytics
-  getProductAnalytics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/products${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Financial analytics
-  getFinancialAnalytics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/financial${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Export reports
-  exportReport(token: string | null, type: string, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/reports/export/${type}${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
   },
 };
 
@@ -503,17 +556,3 @@ export const incidentsApi = {
   },
 };
 
-export const zardasApi = {
-  getBalance(token: string | null, userId: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}/balance`, { method: 'GET' });
-  },
-  getHistory(token: string | null, userId: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}/history`, { method: 'GET' });
-  },
-  redeemZardas(token: string | null, userId: string, discountAmount: number, reason: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}/redeem`, {
-      method: 'POST',
-      body: JSON.stringify({ discountAmount, reason }),
-    });
-  },
-};
