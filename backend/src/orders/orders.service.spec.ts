@@ -3,6 +3,8 @@ import { OrdersService } from './orders.service';
 import { OrdersRepository } from './orders.repository';
 import { EventBusService } from '../common/events/event-bus.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ScheduleService } from '../schedule/schedule.service';
+import { ZardasService } from '../zardas/zardas.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OrderStatus, PaymentMethod } from '../../../shared/enums';
 
@@ -17,10 +19,24 @@ const mockPrismaService = {
 
 const mockOrdersRepository = {
   findProductsByIds: jest.fn(),
+  findById: jest.fn(),
+  updateStatus: jest.fn(),
 };
 
 const mockEventBus = {
   emit: jest.fn(),
+};
+
+const mockScheduleService = {
+  assertOpenForOrders: jest.fn(),
+};
+
+const mockZardasService = {
+  addZardas: jest.fn(),
+  getBalance: jest.fn(),
+  getOffer: jest.fn(),
+  getLeagueRank: jest.fn(),
+  redeemZardasInTransaction: jest.fn(),
 };
 
 describe('OrdersService', () => {
@@ -33,6 +49,8 @@ describe('OrdersService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: OrdersRepository, useValue: mockOrdersRepository },
         { provide: EventBusService, useValue: mockEventBus },
+        { provide: ScheduleService, useValue: mockScheduleService },
+        { provide: ZardasService, useValue: mockZardasService },
       ],
     }).compile();
 
@@ -66,8 +84,8 @@ describe('OrdersService', () => {
   });
 
   it('should update order status only on valid transition', async () => {
-    mockPrismaService.order.findUnique.mockResolvedValue({ id: 'o1', status: OrderStatus.PENDING });
-    mockPrismaService.order.update.mockResolvedValue({ id: 'o1', status: OrderStatus.CONFIRMED });
+    mockOrdersRepository.findById.mockResolvedValue({ id: 'o1', status: OrderStatus.PENDING });
+    mockOrdersRepository.updateStatus.mockResolvedValue({ id: 'o1', status: OrderStatus.CONFIRMED });
 
     const result = await service.updateStatus('o1', { status: OrderStatus.CONFIRMED } as any);
 
@@ -76,7 +94,7 @@ describe('OrdersService', () => {
   });
 
   it('should throw if order id does not exist', async () => {
-    mockPrismaService.order.findUnique.mockResolvedValue(null);
+    mockOrdersRepository.findById.mockResolvedValue(null);
 
     await expect(service.updateStatus('missing', { status: OrderStatus.CONFIRMED } as any)).rejects.toThrow(NotFoundException);
   });
