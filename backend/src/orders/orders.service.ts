@@ -9,6 +9,13 @@ import { OrderDomain } from './domain/order.entity';
 import { OrdersRepository } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
+type ProductForOrder = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+};
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -30,7 +37,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = await this.ordersRepository.findProductsByIds(itemIds) as ProductForOrder[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -43,7 +50,7 @@ export class OrdersService {
     let offerToRedeem: any;
     let redemptionCost = 0;
 
-    const priceMap = new Map(products.map((product) => [product.id, product.price]));
+    const priceMap = new Map<string, number>(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
       payload.items.map((item) => ({
         quantity: item.quantity,
@@ -93,7 +100,7 @@ export class OrdersService {
       throw new BadRequestException('El pedido mínimo es de 15 €.');
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx: any) => {
       for (const item of payload.items) {
         const product = products.find((p) => p.id === item.productId);
         if (product && product.stock < item.quantity) {
@@ -178,7 +185,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = await this.ordersRepository.findProductsByIds(itemIds) as ProductForOrder[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -189,7 +196,7 @@ export class OrdersService {
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
 
-    const priceMap = new Map(products.map((product) => [product.id, product.price]));
+    const priceMap = new Map<string, number>(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
       payload.items.map((item) => ({
         quantity: item.quantity,
