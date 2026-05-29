@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min, Max } from 'class-validator';
-import { ShiftType } from '../../../../shared/enums';
+import { ShiftType } from '../../../shared/enums';
 
 export class CreateScheduleWindowDto {
   @IsInt()
