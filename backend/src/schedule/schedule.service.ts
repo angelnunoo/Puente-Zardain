@@ -89,7 +89,7 @@ export class ScheduleService {
    */
   @LogMethod('create special schedule')
   async createSpecial(dto: SpecialScheduleDto): Promise<ISpecialSchedule> {
-    ScheduleDomain.validateSpecialSchedule(dto);
+    ScheduleDomain.validateSpecialSchedule(dto as any);
     return this.scheduleRepository.createSpecialSchedule(dto);
   }
 
@@ -101,7 +101,7 @@ export class ScheduleService {
     id: string,
     dto: Partial<SpecialScheduleDto>,
   ): Promise<ISpecialSchedule> {
-    ScheduleDomain.validateSpecialSchedule(dto);
+    ScheduleDomain.validateSpecialSchedule(dto as any);
     return this.scheduleRepository.updateSpecialSchedule(id, dto);
   }
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ReportPeriod } from '../../../../shared/enums';
+import { ReportPeriod } from '../../../shared/enums';
 
 @Injectable()
 export class AnalyticsService {

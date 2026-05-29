@@ -60,6 +60,10 @@ export class CreateOrderDto {
   paymentMethod: PaymentMethod;
 
   @IsOptional()
+  @IsString()
+  offerId?: string;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => RedemptionDto)
   redemption?: RedemptionDto;
