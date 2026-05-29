@@ -192,7 +192,7 @@ export class OrdersService {
     }
 
     let discount = 0;
-    let offer = null;
+    let offer: any = null;
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
 
