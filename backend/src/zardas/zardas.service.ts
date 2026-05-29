@@ -26,7 +26,7 @@ export class ZardasService {
   }
 
   async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Crear transacción
       await tx.zardasTransaction.create({
         data: {
@@ -79,7 +79,7 @@ export class ZardasService {
   }
 
   async redeemZardas(userId: string, discountAmount: number, reason: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       return this.redeemZardasInTransaction(tx, userId, discountAmount, reason);
     });
   }
