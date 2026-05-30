@@ -20,6 +20,8 @@ const mockPrismaService = {
 const mockOrdersRepository = {
   findProductsByIds: jest.fn(),
   findAllForUser: jest.fn(),
+  findById: jest.fn(),
+  updateStatus: jest.fn(),
 };
 
 const mockEventBus = {
@@ -134,8 +136,8 @@ describe('OrdersService', () => {
   });
 
   it('should update order status only on valid transition', async () => {
-    mockPrismaService.order.findUnique.mockResolvedValue({ id: 'o1', status: OrderStatus.PENDING });
-    mockPrismaService.order.update.mockResolvedValue({ id: 'o1', status: OrderStatus.CONFIRMED });
+    mockOrdersRepository.findById.mockResolvedValue({ id: 'o1', status: OrderStatus.PENDING });
+    mockOrdersRepository.updateStatus.mockResolvedValue({ id: 'o1', status: OrderStatus.CONFIRMED });
 
     const result = await service.updateStatus('o1', { status: OrderStatus.CONFIRMED } as any);
 
@@ -144,7 +146,7 @@ describe('OrdersService', () => {
   });
 
   it('should throw if order id does not exist', async () => {
-    mockPrismaService.order.findUnique.mockResolvedValue(null);
+    mockOrdersRepository.findById.mockResolvedValue(null);
 
     await expect(service.updateStatus('missing', { status: OrderStatus.CONFIRMED } as any)).rejects.toThrow(NotFoundException);
   });
