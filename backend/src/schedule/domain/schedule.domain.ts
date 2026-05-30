@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import { DayOfWeek, ShiftType } from '../../../shared/enums';
-import { IScheduleWindow, ISpecialSchedule } from '../../../shared/interfaces';
+import { DayOfWeek, ShiftType } from '../../../../shared/enums';
+import { IScheduleWindow, ISpecialSchedule } from '../../../../shared/interfaces';
+
+type SpecialScheduleInput = Partial<Omit<ISpecialSchedule, 'date'> & { date?: Date | string }>;
 
 export class ScheduleDomain {
   /**
@@ -29,7 +31,7 @@ export class ScheduleDomain {
   /**
    * Validates a special schedule
    */
-  static validateSpecialSchedule(schedule: Partial<ISpecialSchedule>): void {
+  static validateSpecialSchedule(schedule: SpecialScheduleInput): void {
     if (schedule.date) {
       const date = new Date(schedule.date);
       if (isNaN(date.getTime())) {

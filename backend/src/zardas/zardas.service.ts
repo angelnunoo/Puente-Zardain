@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -25,8 +26,23 @@ export class ZardasService {
     }
   }
 
+  getLeagueRank(league: string) {
+    const ranks: Record<string, number> = {
+      BRONZE: 1,
+      'Bronce Zarda': 1,
+      SILVER: 2,
+      'Plata Zarda': 2,
+      GOLD: 3,
+      'Oro Zarda': 3,
+      PLATINUM: 4,
+      'Platino Zarda': 4,
+    };
+
+    return ranks[league] ?? 0;
+  }
+
   async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Crear transacción
       await tx.zardasTransaction.create({
         data: {
@@ -78,42 +94,63 @@ export class ZardasService {
     });
   }
 
-  async redeemZardas(userId: string, discountAmount: number, reason: string) {
-    const balance = await this.prisma.zardasBalance.findUnique({ where: { userId } });
-    if (!balance || balance.available < discountAmount) {
-      throw new Error('Saldo insuficiente');
+  async getOffer(offerId: string) {
+    const offer = await this.prisma.zardasOffer.findUnique({ where: { id: offerId } });
+    if (!offer) {
+      throw new NotFoundException('Oferta de Zardas no encontrada');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // Crear transacción negativa
-      await tx.zardasTransaction.create({
-        data: {
-          userId,
-          amount: -discountAmount,
-          type: 'REDEMPTION',
-          reason,
-        },
-      });
+    return offer;
+  }
 
-      // Actualizar balance
-      const updatedBalance = await tx.zardasBalance.update({
-        where: { userId },
-        data: { available: { decrement: discountAmount } },
-      });
+  async redeemZardas(userId: string, discountAmount: number, reason: string) {
+    return this.prisma.$transaction((tx: Prisma.TransactionClient) =>
+      this.redeemZardasInTransaction(tx, userId, discountAmount, reason),
+    );
+  }
 
-      // Actualizar user.zardas
-      await tx.user.update({
-        where: { id: userId },
-        data: { zardas: updatedBalance.available },
-      });
+  async redeemZardasInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    discountAmount: number,
+    reason: string,
+  ) {
+    if (discountAmount <= 0) {
+      throw new BadRequestException('La cantidad a canjear debe ser positiva');
+    }
 
-      return updatedBalance;
+    const updated = await tx.zardasBalance.updateMany({
+      where: {
+        userId,
+        available: { gte: discountAmount },
+      },
+      data: { available: { decrement: discountAmount } },
     });
+
+    if (updated.count !== 1) {
+      throw new BadRequestException('Saldo insuficiente');
+    }
+
+    await tx.zardasTransaction.create({
+      data: {
+        userId,
+        amount: -discountAmount,
+        type: 'REDEMPTION',
+        reason,
+      },
+    });
+
+    const updatedBalance = await tx.zardasBalance.findUniqueOrThrow({ where: { userId } });
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { zardas: updatedBalance.available },
+    });
+
+    return updatedBalance;
   }
 
   async adjustZardas(userId: string, amount: number, reason: string, adminId: string) {
     return this.addZardas(userId, amount, reason, 'MANUAL_ADJUSTMENT', undefined, adminId);
-  }
-    };
   }
 }
