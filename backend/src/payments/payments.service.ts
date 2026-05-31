@@ -1,7 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../common/events/event-bus.service';
-import { OrderStatus, PaymentMethod, Role } from '../../../shared/enums';
+import { PaymentMethod } from '../../../shared/enums';
 import { NotificationsService } from '../notifications/notifications.service';
 
 interface PaymentMethodConfig {
@@ -32,6 +32,33 @@ interface InvoiceData {
   deliveryFee: number;
   total: number;
   paymentMethod: PaymentMethod;
+}
+
+interface InvoiceOrderSnapshot {
+  id: string;
+  userId: string;
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  total: number;
+  paymentMethod: string;
+  user: {
+    name: string;
+    email: string;
+    phone: string;
+  };
+  items: Array<{
+    quantity: number;
+    price: number;
+    product: {
+      name: string;
+    };
+  }>;
+}
+
+interface PaymentStatsOrderSnapshot {
+  total: number;
+  paymentMethod: string;
 }
 
 @Injectable()
@@ -75,7 +102,7 @@ export class PaymentsService {
   // ==================== FACTURACIÓN ====================
 
   async generateInvoice(orderId: string): Promise<any> {
-    const order = await this.prisma.order.findUnique({
+    const order = (await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
         items: {
@@ -85,7 +112,7 @@ export class PaymentsService {
         },
         user: true
       }
-    });
+    })) as InvoiceOrderSnapshot | null;
 
     if (!order) {
       throw new NotFoundException('Pedido no encontrado');
@@ -109,7 +136,7 @@ export class PaymentsService {
       tax: order.tax,
       deliveryFee: order.deliveryFee,
       total: order.total,
-      paymentMethod: order.paymentMethod
+      paymentMethod: order.paymentMethod as PaymentMethod
     };
 
     // Generar número de factura
@@ -148,108 +175,6 @@ export class PaymentsService {
     });
   }
 
-  // ==================== WEBHOOKS ====================
-
-  constructEvent(payload: Buffer | string, signature: string, webhookSecret: string) {
-    try {
-      return this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
-    } catch (error) {
-      throw new BadRequestException('Invalid Stripe webhook signature');
-    }
-  }
-
-  async handleWebhook(event: Stripe.Event) {
-    this.logger.log(`Processing webhook event: ${event.type}`);
-
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        await this.handlePaymentSuccess(event.data.object as Stripe.PaymentIntent);
-        break;
-      case 'payment_intent.payment_failed':
-        await this.handlePaymentFailure(event.data.object as Stripe.PaymentIntent);
-        break;
-      case 'charge.refunded':
-        await this.handleRefund(event.data.object as Stripe.Charge);
-        break;
-      default:
-        this.logger.log(`Unhandled event type: ${event.type}`);
-    }
-
-    return { received: true };
-  }
-
-  private async handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
-    const orderId = paymentIntent.metadata.orderId;
-    if (!orderId) return;
-
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) return;
-
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentStatus: 'SUCCEEDED',
-        status: order.status === OrderStatus.PENDING ? OrderStatus.CONFIRMED : order.status,
-        paidAt: new Date(),
-      },
-    });
-
-    // Generar factura automáticamente
-    await this.generateInvoice(orderId);
-
-    this.eventBus.emit('OrderStatusChanged', {
-      orderId: updated.id,
-      previousStatus: order.status,
-      newStatus: updated.status,
-    });
-
-    this.notificationsService.sendOrderUpdate(
-      orderId,
-      'CONFIRMED',
-      '¡Pago exitoso! Tu pedido ha sido confirmado.',
-      order.userId
-    );
-  }
-
-  private async handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
-    const orderId = paymentIntent.metadata.orderId;
-    if (!orderId) return;
-
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) return;
-
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { paymentStatus: 'FAILED' },
-    });
-
-    this.notificationsService.sendError(
-      'Pago Fallido',
-      'No se pudo procesar tu pago. Por favor, intenta con otro método.',
-      [order.userId]
-    );
-  }
-
-  private async handleRefund(charge: Stripe.Charge) {
-    const orderId = charge.metadata?.orderId as string;
-    if (!orderId) return;
-
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { paymentStatus: 'REFUNDED' },
-    });
-
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (order) {
-      this.notificationsService.sendOrderUpdate(
-        orderId,
-        'REFUNDED',
-        'Se ha procesado un reembolso para tu pedido.',
-        order.userId
-      );
-    }
-  }
-
   // ==================== MÉTRICAS ====================
 
   async getPaymentStats(startDate?: Date, endDate?: Date) {
@@ -261,18 +186,19 @@ export class PaymentsService {
       paymentStatus: 'SUCCEEDED'
     } : { paymentStatus: 'SUCCEEDED' };
 
-    const orders = await this.prisma.order.findMany({
+    const orders = (await this.prisma.order.findMany({
       where,
       include: {
         user: true
       }
-    });
+    })) as PaymentStatsOrderSnapshot[];
 
     const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
     const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
 
     const paymentMethodStats = orders.reduce((stats, order) => {
-      stats[order.paymentMethod] = (stats[order.paymentMethod] || 0) + 1;
+      const paymentMethod = order.paymentMethod as PaymentMethod;
+      stats[paymentMethod] = (stats[paymentMethod] || 0) + 1;
       return stats;
     }, {} as Record<PaymentMethod, number>);
 

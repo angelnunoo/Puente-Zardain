@@ -146,18 +146,3 @@ export class ScheduleRepository {
     });
   }
 }
-    return this.prisma.scheduleWindow.delete({ where: { id } });
-  }
-
-  async createSpecial(data: Parameters<PrismaService['specialSchedule']['create']>[0]) {
-    return this.prisma.specialSchedule.create(data);
-  }
-
-  async updateSpecial(id: string, data: Parameters<PrismaService['specialSchedule']['update']>[0]['data']) {
-    return this.prisma.specialSchedule.update({ where: { id }, data });
-  }
-
-  async deleteSpecial(id: string) {
-    return this.prisma.specialSchedule.delete({ where: { id } });
-  }
-}
