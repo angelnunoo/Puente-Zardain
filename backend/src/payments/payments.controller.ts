@@ -1,23 +1,9 @@
-import { 
-  BadRequestException, 
-  Body, 
-  Controller, 
-  Headers, 
-  InternalServerErrorException, 
-  Post, 
-  Get, 
-  Req, 
-  UseGuards,
-  Param,
-  Query,
-  HttpStatus,
-  HttpCode
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/guards/roles.decorator';
-import { Role, PaymentMethod } from '../../../shared/enums';
+import { Role } from '../../../shared/enums';
 
 @Controller('payments')
 export class PaymentsController {
@@ -41,14 +27,6 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   async getInvoices(@Req() req: any) {
     return this.paymentsService.getInvoices(req.user.userId);
-  }
-      throw new InternalServerErrorException('Stripe webhook secret not configured');
-    }
-    if (!signature) {
-      throw new BadRequestException('Missing Stripe signature header');
-    }
-    const event = this.paymentsService.constructEvent(req.body, signature, webhookSecret);
-    return this.paymentsService.handleWebhook(event);
   }
 
   @Post('paypal/webhook')

@@ -56,6 +56,10 @@ export class CreateOrderDto {
   @IsString()
   address?: string;
 
+  @IsOptional()
+  @IsString()
+  offerId?: string;
+
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
 

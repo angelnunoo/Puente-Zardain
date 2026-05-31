@@ -40,6 +40,8 @@ export class OrdersService {
     let discount = 0;
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
+    let selectedOffer: Awaited<ReturnType<ZardasService['getOffer']>> | undefined = undefined;
+    let zardasRedemption: { amount: number; reason: (orderId: string) => string } | undefined = undefined;
 
     const priceMap = new Map(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
@@ -54,33 +56,46 @@ export class OrdersService {
     const baseTotal = subtotal + tax + deliveryFee;
 
     if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      if (!offer.active) {
+      selectedOffer = await this.zardasService.getOffer(payload.offerId);
+      if (!selectedOffer.active) {
         throw new BadRequestException('La oferta seleccionada no está disponible.');
       }
 
       const balance = await this.zardasService.getBalance(userId);
-      if (balance.available < offer.cost) {
+      if (balance.available < selectedOffer.cost) {
         throw new BadRequestException('Saldo de Zardas insuficiente');
       }
-      if (offer.leagueMin && this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(offer.leagueMin)) {
+      if (
+        selectedOffer.leagueMin &&
+        this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(selectedOffer.leagueMin)
+      ) {
         throw new BadRequestException('No cumple la liga mínima para esta oferta');
       }
 
-      offerId = offer.id;
-      if (offer.type === 'DESCUENTO_FIJO') {
-        discount = Number(Math.min(offer.value, baseTotal).toFixed(2));
-      } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
-        discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
-      } else if (offer.type === 'PRODUCTO_GRATIS') {
-        offerNote = `Oferta gratis aplicada: ${offer.name}`;
+      offerId = selectedOffer.id;
+      if (selectedOffer.type === 'DESCUENTO_FIJO') {
+        discount = Number(Math.min(selectedOffer.value, baseTotal).toFixed(2));
+      } else if (selectedOffer.type === 'DESCUENTO_PORCENTAJE') {
+        discount = Number((baseTotal * (selectedOffer.value / 100)).toFixed(2));
+      } else if (selectedOffer.type === 'PRODUCTO_GRATIS') {
+        discount = Number(Math.min(this.calculateFreeProductDiscount(products, payload.items), baseTotal).toFixed(2));
+        offerNote = `Oferta gratis aplicada: ${selectedOffer.name}`;
       }
+
+      zardasRedemption = {
+        amount: selectedOffer.cost,
+        reason: (orderId: string) => `Canje de oferta ${selectedOffer?.name} en pedido ${orderId.slice(0, 8)}`,
+      };
     } else if (payload.redemption) {
       const balance = await this.zardasService.getBalance(userId);
       if (balance.available < payload.redemption.discountAmount) {
         throw new BadRequestException('Saldo de Zardas insuficiente');
       }
       discount = payload.redemption.discountAmount;
+      zardasRedemption = {
+        amount: discount,
+        reason: (orderId: string) => `Canje en pedido ${orderId.slice(0, 8)}`,
+      };
     }
 
     const total = Number((baseTotal - discount).toFixed(2));
@@ -137,18 +152,14 @@ export class OrdersService {
         data: { orderId: created.id },
       });
 
-      this.eventBus.emit('OrderCreated', { orderId: created.id, userId, total });
+      if (zardasRedemption) {
+        await this.zardasService.redeemZardas(userId, zardasRedemption.amount, zardasRedemption.reason(created.id), tx);
+      }
+
       return created;
     });
 
-    // Redeem Zardas if applied via offer or old redemption path
-    if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      await this.zardasService.redeemZardas(userId, offer.cost, `Canje de oferta ${offer.name} en pedido ${order.id.slice(0, 8)}`);
-    } else if (payload.redemption && discount > 0) {
-      await this.zardasService.redeemZardas(userId, discount, `Canje en pedido ${order.id.slice(0, 8)}`);
-    }
-
+    this.eventBus.emit('OrderCreated', { orderId: order.id, userId, total });
     return order;
   }
 
@@ -205,6 +216,7 @@ export class OrdersService {
       } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
         discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
       } else if (offer.type === 'PRODUCTO_GRATIS') {
+        discount = Number(Math.min(this.calculateFreeProductDiscount(products, payload.items), baseTotal).toFixed(2));
         offerNote = `Oferta gratis aplicada: ${offer.name}`;
       }
     } else if (payload.redemption) {
@@ -264,6 +276,15 @@ export class OrdersService {
 
   private calculateTax(subtotal: number) {
     return Number((subtotal * 0.1).toFixed(2));
+  }
+
+  private calculateFreeProductDiscount(products: Array<{ id: string; price: number }>, items: Array<{ productId: string; quantity: number }>) {
+    const prices = items
+      .filter((item) => item.quantity > 0)
+      .map((item) => products.find((product) => product.id === item.productId)?.price)
+      .filter((price): price is number => typeof price === 'number');
+
+    return prices.length ? Math.min(...prices) : 0;
   }
 
   private async assertOrderLimit(userId: string, ip?: string) {
@@ -345,8 +366,26 @@ export class OrdersService {
     if (payload.status === OrderStatus.READY && !order.zardasAwarded) {
       const zardasEarned = Math.floor(order.total / 5);
       if (zardasEarned > 0) {
-        await this.zardasService.addZardas(order.userId, zardasEarned, `Pedido ${order.id.slice(0, 8)} completado`, 'ORDER_COMPLETION', order.id);
-        await this.prisma.order.update({ where: { id }, data: { zardasAwarded: true } });
+        await this.prisma.$transaction(async (tx) => {
+          const claimed = await tx.order.updateMany({
+            where: { id, zardasAwarded: false },
+            data: { zardasAwarded: true },
+          });
+
+          if (claimed.count !== 1) {
+            return;
+          }
+
+          await this.zardasService.addZardas(
+            order.userId,
+            zardasEarned,
+            `Pedido ${order.id.slice(0, 8)} completado`,
+            'ORDER_COMPLETION',
+            order.id,
+            undefined,
+            tx,
+          );
+        });
       }
     }
 

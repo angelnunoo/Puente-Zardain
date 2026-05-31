@@ -186,7 +186,7 @@ model ZardasBalance {
   available Int      @default(0)
   pending   Int      @default(0)
   expired   Int      @default(0)
-  league    String   @default("Novato")
+  league    String   @default("Bronce Zarda")
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 }
@@ -200,6 +200,7 @@ model ZardasOffer {
   description String?
   leagueMin  String?
   active     Boolean   @default(true)
+  orders     Order[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
