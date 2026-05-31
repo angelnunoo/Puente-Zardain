@@ -1,3 +1,7 @@
+jest.mock('../schedule/schedule.service', () => ({
+  ScheduleService: class ScheduleService {},
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
 import { OrdersRepository } from './orders.repository';
