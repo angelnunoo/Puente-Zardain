@@ -34,6 +34,33 @@ interface InvoiceData {
   paymentMethod: PaymentMethod;
 }
 
+interface InvoiceOrderSnapshot {
+  id: string;
+  userId: string;
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  total: number;
+  paymentMethod: string;
+  user: {
+    name: string;
+    email: string;
+    phone: string;
+  };
+  items: Array<{
+    quantity: number;
+    price: number;
+    product: {
+      name: string;
+    };
+  }>;
+}
+
+interface PaymentStatsOrderSnapshot {
+  total: number;
+  paymentMethod: string;
+}
+
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger('PaymentsService');
@@ -75,7 +102,7 @@ export class PaymentsService {
   // ==================== FACTURACIÓN ====================
 
   async generateInvoice(orderId: string): Promise<any> {
-    const order = await this.prisma.order.findUnique({
+    const order = (await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
         items: {
@@ -85,7 +112,7 @@ export class PaymentsService {
         },
         user: true
       }
-    });
+    })) as InvoiceOrderSnapshot | null;
 
     if (!order) {
       throw new NotFoundException('Pedido no encontrado');
@@ -159,12 +186,12 @@ export class PaymentsService {
       paymentStatus: 'SUCCEEDED'
     } : { paymentStatus: 'SUCCEEDED' };
 
-    const orders = await this.prisma.order.findMany({
+    const orders = (await this.prisma.order.findMany({
       where,
       include: {
         user: true
       }
-    });
+    })) as PaymentStatsOrderSnapshot[];
 
     const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
     const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;

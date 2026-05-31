@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { EventBusService } from '../common/events/event-bus.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { ZardasService } from '../zardas/zardas.service';
@@ -8,6 +9,13 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderDomain } from './domain/order.entity';
 import { OrdersRepository } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
+
+type OrderProductSnapshot = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+};
 
 @Injectable()
 export class OrdersService {
@@ -30,7 +38,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = (await this.ordersRepository.findProductsByIds(itemIds)) as OrderProductSnapshot[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -104,7 +112,7 @@ export class OrdersService {
       throw new BadRequestException('El pedido mínimo es de 15 €.');
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const item of payload.items) {
         const product = products.find((p) => p.id === item.productId);
         if (product && product.stock < item.quantity) {
@@ -173,7 +181,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = (await this.ordersRepository.findProductsByIds(itemIds)) as OrderProductSnapshot[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -366,7 +374,7 @@ export class OrdersService {
     if (payload.status === OrderStatus.READY && !order.zardasAwarded) {
       const zardasEarned = Math.floor(order.total / 5);
       if (zardasEarned > 0) {
-        await this.prisma.$transaction(async (tx) => {
+        await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           const claimed = await tx.order.updateMany({
             where: { id, zardasAwarded: false },
             data: { zardasAwarded: true },

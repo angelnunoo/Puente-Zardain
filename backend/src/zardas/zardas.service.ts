@@ -68,7 +68,7 @@ export class ZardasService {
       return this.addZardasInTransaction(tx, userId, amount, reason, type, orderId, createdBy);
     }
 
-    return this.prisma.$transaction((transaction) =>
+    return this.prisma.$transaction((transaction: Prisma.TransactionClient) =>
       this.addZardasInTransaction(transaction, userId, amount, reason, type, orderId, createdBy),
     );
   }
@@ -104,7 +104,7 @@ export class ZardasService {
       return this.redeemZardasInTransaction(tx, userId, discountAmount, reason);
     }
 
-    return this.prisma.$transaction((transaction) =>
+    return this.prisma.$transaction((transaction: Prisma.TransactionClient) =>
       this.redeemZardasInTransaction(transaction, userId, discountAmount, reason),
     );
   }
