@@ -32,10 +32,10 @@ export class OrdersRepository {
   }
 
   async averageDeliveredMinutes() {
-    const deliveries = await this.prisma.order.findMany({
+    const deliveries = (await this.prisma.order.findMany({
       where: { status: OrderStatus.DELIVERED },
       select: { createdAt: true, updatedAt: true },
-    });
+    })) as Array<{ createdAt: Date; updatedAt: Date }>;
 
     if (!deliveries.length) {
       return 20;
