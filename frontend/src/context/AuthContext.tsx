@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 type AuthState = {
   token: string | null;
@@ -20,7 +20,7 @@ type AuthContextValue = AuthState & {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 // Helper para verificar si el token está expirado
-const isTokenExpired = (token: string): boolean => {
+const isJwtExpired = (token: string): boolean => {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const currentTime = Date.now() / 1000;
@@ -31,14 +31,14 @@ const isTokenExpired = (token: string): boolean => {
 };
 
 // Helper para refrescar el token
-const refreshAccessToken = async (refreshToken: string): Promise<{ access_token: string; refresh_token: string } | null> => {
+const refreshAccessToken = async (refreshToken: string): Promise<{ access_token: string; refresh_token?: string } | null> => {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({ refreshToken }),
     });
 
     if (response.ok) {
@@ -56,9 +56,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
-  const isTokenExpired = useMemo(() => {
+  const clearSession = useCallback(() => {
+    window.localStorage.removeItem('token');
+    window.localStorage.removeItem('refreshToken');
+    window.localStorage.removeItem('user');
+    setToken(null);
+    setRefreshToken(null);
+    setUser(null);
+  }, []);
+
+  const tokenExpired = useMemo(() => {
     if (!token) return true;
-    return isTokenExpired(token);
+    return isJwtExpired(token);
   }, [token]);
 
   useEffect(() => {
@@ -83,16 +92,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!token || !refreshToken || loading) return;
 
     const checkExpiration = () => {
-      if (isTokenExpired) {
+      if (tokenExpired) {
         refreshAccessToken(refreshToken).then((newTokens) => {
           if (newTokens) {
             setToken(newTokens.access_token);
-            setRefreshToken(newTokens.refresh_token);
+            const nextRefreshToken = newTokens.refresh_token || refreshToken;
+            setRefreshToken(nextRefreshToken);
             window.localStorage.setItem('token', newTokens.access_token);
-            window.localStorage.setItem('refreshToken', newTokens.refresh_token);
+            window.localStorage.setItem('refreshToken', nextRefreshToken);
           } else {
             // Si no se puede refrescar, cerrar sesión
-            signOut();
+            clearSession();
           }
         });
       }
@@ -101,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Verificar cada minuto
     const interval = setInterval(checkExpiration, 60000);
     return () => clearInterval(interval);
-  }, [token, refreshToken, loading, isTokenExpired]);
+  }, [token, refreshToken, loading, tokenExpired, clearSession]);
 
   const value = useMemo(
     () =>({
@@ -109,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshToken,
       loading,
       user,
-      isTokenExpired,
+      isTokenExpired: tokenExpired,
       signIn(tokenValue: string, refreshTokenValue: string, userData?: any) {
         window.localStorage.setItem('token', tokenValue);
         window.localStorage.setItem('refreshToken', refreshTokenValue);
@@ -121,12 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRefreshToken(refreshTokenValue);
       },
       signOut() {
-        window.localStorage.removeItem('token');
-        window.localStorage.removeItem('refreshToken');
-        window.localStorage.removeItem('user');
-        setToken(null);
-        setRefreshToken(null);
-        setUser(null);
+        clearSession();
       },
       refreshAccessToken: async (): Promise<boolean> => {
         if (!refreshToken) return false;
@@ -135,9 +140,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const newTokens = await refreshAccessToken(refreshToken);
           if (newTokens) {
             setToken(newTokens.access_token);
-            setRefreshToken(newTokens.refresh_token);
+            const nextRefreshToken = newTokens.refresh_token || refreshToken;
+            setRefreshToken(nextRefreshToken);
             window.localStorage.setItem('token', newTokens.access_token);
-            window.localStorage.setItem('refreshToken', newTokens.refresh_token);
+            window.localStorage.setItem('refreshToken', nextRefreshToken);
             return true;
           }
           return false;
@@ -146,10 +152,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       isTokenValid: (): boolean => {
-        return token && !isTokenExpired(token);
+        return !!token && !isJwtExpired(token);
       },
     }),
-    [token, refreshToken, loading, user, isTokenExpired],
+    [token, refreshToken, loading, user, tokenExpired, clearSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

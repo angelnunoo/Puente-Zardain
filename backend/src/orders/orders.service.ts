@@ -40,6 +40,7 @@ export class OrdersService {
     let discount = 0;
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
+    let appliedOffer: Awaited<ReturnType<ZardasService['getOffer']>> | null = null;
 
     const priceMap = new Map(products.map((product) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
@@ -54,26 +55,26 @@ export class OrdersService {
     const baseTotal = subtotal + tax + deliveryFee;
 
     if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      if (!offer.active) {
+      appliedOffer = await this.zardasService.getOffer(payload.offerId);
+      if (!appliedOffer.active) {
         throw new BadRequestException('La oferta seleccionada no está disponible.');
       }
 
       const balance = await this.zardasService.getBalance(userId);
-      if (balance.available < offer.cost) {
+      if (balance.available < appliedOffer.cost) {
         throw new BadRequestException('Saldo de Zardas insuficiente');
       }
-      if (offer.leagueMin && this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(offer.leagueMin)) {
+      if (appliedOffer.leagueMin && this.zardasService.getLeagueRank(balance.league) < this.zardasService.getLeagueRank(appliedOffer.leagueMin)) {
         throw new BadRequestException('No cumple la liga mínima para esta oferta');
       }
 
-      offerId = offer.id;
-      if (offer.type === 'DESCUENTO_FIJO') {
-        discount = Number(Math.min(offer.value, baseTotal).toFixed(2));
-      } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
-        discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
-      } else if (offer.type === 'PRODUCTO_GRATIS') {
-        offerNote = `Oferta gratis aplicada: ${offer.name}`;
+      offerId = appliedOffer.id;
+      if (appliedOffer.type === 'DESCUENTO_FIJO') {
+        discount = Number(Math.min(appliedOffer.value, baseTotal).toFixed(2));
+      } else if (appliedOffer.type === 'DESCUENTO_PORCENTAJE') {
+        discount = Number((baseTotal * (appliedOffer.value / 100)).toFixed(2));
+      } else if (appliedOffer.type === 'PRODUCTO_GRATIS') {
+        offerNote = `Oferta gratis aplicada: ${appliedOffer.name}`;
       }
     } else if (payload.redemption) {
       const balance = await this.zardasService.getBalance(userId);
@@ -113,11 +114,16 @@ export class OrdersService {
           offerId,
           notes: offerNote || undefined,
           items: {
-            create: payload.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              customizations: item.customizations,
-            })),
+            create: payload.items.map((item) => {
+              const price = priceMap.get(item.productId) ?? 0;
+              return {
+                productId: item.productId,
+                quantity: item.quantity,
+                price,
+                subtotal: Number((price * item.quantity).toFixed(2)),
+                customizations: item.customizations,
+              };
+            }),
           },
         },
         include: {
@@ -137,17 +143,27 @@ export class OrdersService {
         data: { orderId: created.id },
       });
 
+      if (appliedOffer) {
+        await this.zardasService.redeemZardasInTransaction(
+          tx,
+          userId,
+          appliedOffer.cost,
+          `Canje de oferta ${appliedOffer.name} en pedido ${created.id.slice(0, 8)}`,
+          created.id,
+        );
+      } else if (payload.redemption && discount > 0) {
+        await this.zardasService.redeemZardasInTransaction(
+          tx,
+          userId,
+          discount,
+          `Canje en pedido ${created.id.slice(0, 8)}`,
+          created.id,
+        );
+      }
+
       this.eventBus.emit('OrderCreated', { orderId: created.id, userId, total });
       return created;
     });
-
-    // Redeem Zardas if applied via offer or old redemption path
-    if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      await this.zardasService.redeemZardas(userId, offer.cost, `Canje de oferta ${offer.name} en pedido ${order.id.slice(0, 8)}`);
-    } else if (payload.redemption && discount > 0) {
-      await this.zardasService.redeemZardas(userId, discount, `Canje en pedido ${order.id.slice(0, 8)}`);
-    }
 
     return order;
   }

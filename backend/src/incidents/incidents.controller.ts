@@ -6,6 +6,7 @@ import {
   Query, 
   Param, 
   Body, 
+  Req,
   UseGuards,
   BadRequestException
 } from '@nestjs/common';
