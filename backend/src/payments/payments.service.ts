@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, Logger } from '@nestjs/common';
+import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../common/events/event-bus.service';
 import { OrderStatus, PaymentMethod, Role } from '../../../shared/enums';
@@ -37,6 +38,7 @@ interface InvoiceData {
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger('PaymentsService');
+  private readonly stripe: Stripe;
 
   // Configuración de métodos de pago
   private readonly paymentMethods: PaymentMethodConfig[] = [
@@ -60,7 +62,11 @@ export class PaymentsService {
     private readonly prisma: PrismaService, 
     private readonly eventBus: EventBusService,
     private readonly notificationsService: NotificationsService
-  ) {}
+  ) {
+    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+      apiVersion: '2022-11-15',
+    });
+  }
 
   // ==================== MÉTODOS DE PAGO ====================
 

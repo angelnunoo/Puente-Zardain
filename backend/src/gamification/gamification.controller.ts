@@ -12,7 +12,7 @@ import { GamificationService } from './gamification.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/guards/roles.decorator';
-import { Role } from '../../../../shared/enums';
+import { Role } from '../../../shared/enums';
 
 @Controller('gamification')
 export class GamificationController {

@@ -1,5 +1,5 @@
 import { IsEnum } from 'class-validator';
-import { OrderStatus } from '../../../shared/enums';
+import { OrderStatus } from '../../../../shared/enums';
 
 export class UpdateOrderStatusDto {
   @IsEnum(OrderStatus)

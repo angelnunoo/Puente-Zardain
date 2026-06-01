@@ -3,9 +3,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { CommonModule } from '../common/common.module';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, CommonModule],
+  imports: [PrismaModule, CommonModule, NotificationsModule],
   providers: [PaymentsService],
   controllers: [PaymentsController],
 })

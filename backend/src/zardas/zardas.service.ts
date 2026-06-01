@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -26,7 +26,7 @@ export class ZardasService {
   }
 
   async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Crear transacción
       await tx.zardasTransaction.create({
         data: {
@@ -79,41 +79,64 @@ export class ZardasService {
   }
 
   async redeemZardas(userId: string, discountAmount: number, reason: string) {
-    const balance = await this.prisma.zardasBalance.findUnique({ where: { userId } });
-    if (!balance || balance.available < discountAmount) {
+    return this.prisma.$transaction((tx: any) =>
+      this.redeemZardasInTransaction(tx, userId, discountAmount, reason),
+    );
+  }
+
+  async redeemZardasInTransaction(tx: any, userId: string, discountAmount: number, reason: string, orderId?: string) {
+    const amount = Math.trunc(discountAmount);
+    if (amount <= 0) {
+      throw new Error('Importe de canje inválido');
+    }
+
+    const update = await tx.zardasBalance.updateMany({
+      where: { userId, available: { gte: amount } },
+      data: { available: { decrement: amount } },
+    });
+
+    if (update.count !== 1) {
       throw new Error('Saldo insuficiente');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // Crear transacción negativa
-      await tx.zardasTransaction.create({
-        data: {
-          userId,
-          amount: -discountAmount,
-          type: 'REDEMPTION',
-          reason,
-        },
-      });
-
-      // Actualizar balance
-      const updatedBalance = await tx.zardasBalance.update({
-        where: { userId },
-        data: { available: { decrement: discountAmount } },
-      });
-
-      // Actualizar user.zardas
-      await tx.user.update({
-        where: { id: userId },
-        data: { zardas: updatedBalance.available },
-      });
-
-      return updatedBalance;
+    await tx.zardasTransaction.create({
+      data: {
+        userId,
+        amount: -amount,
+        type: 'REDEMPTION',
+        reason,
+        orderId,
+      },
     });
+
+    const updatedBalance = await tx.zardasBalance.findUnique({ where: { userId } });
+    await tx.user.update({
+      where: { id: userId },
+      data: { zardas: updatedBalance?.available ?? 0 },
+    });
+
+    return updatedBalance;
+  }
+
+  async getOffer(offerId: string) {
+    const offer = await this.prisma.zardasOffer.findUnique({ where: { id: offerId } });
+    if (!offer) {
+      throw new NotFoundException('Oferta de Zardas no encontrada');
+    }
+    return offer;
+  }
+
+  getLeagueRank(league: string) {
+    const ranks: Record<string, number> = {
+      'Bronce Zarda': 1,
+      'Plata Zarda': 2,
+      'Oro Zarda': 3,
+      'Platino Zarda': 4,
+    };
+    return ranks[league] ?? 0;
   }
 
   async adjustZardas(userId: string, amount: number, reason: string, adminId: string) {
     return this.addZardas(userId, amount, reason, 'MANUAL_ADJUSTMENT', undefined, adminId);
-  }
-    };
   }
 }
