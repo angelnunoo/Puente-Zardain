@@ -34,6 +34,19 @@ interface InvoiceData {
   paymentMethod: PaymentMethod;
 }
 
+interface InvoiceOrderItem {
+  quantity: number;
+  price: number;
+  product: {
+    name: string;
+  };
+}
+
+interface PaymentStatsOrder {
+  total: number;
+  paymentMethod: PaymentMethod;
+}
+
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger('PaymentsService');
@@ -99,7 +112,7 @@ export class PaymentsService {
         email: order.user.email,
         phone: order.user.phone,
       },
-      items: order.items.map(item => ({
+      items: order.items.map((item: InvoiceOrderItem) => ({
         name: item.product.name,
         quantity: item.quantity,
         unitPrice: item.price,
@@ -166,10 +179,10 @@ export class PaymentsService {
       }
     });
 
-    const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+    const totalRevenue = orders.reduce((sum: number, order: PaymentStatsOrder) => sum + order.total, 0);
     const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
 
-    const paymentMethodStats = orders.reduce((stats, order) => {
+    const paymentMethodStats = orders.reduce((stats: Record<PaymentMethod, number>, order: PaymentStatsOrder) => {
       stats[order.paymentMethod] = (stats[order.paymentMethod] || 0) + 1;
       return stats;
     }, {} as Record<PaymentMethod, number>);
