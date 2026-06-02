@@ -145,7 +145,7 @@ describe('OrdersService', () => {
     expect(mockZardasService.redeemZardas).toHaveBeenCalledWith(
       'user-id',
       3,
-      expect.stringContaining('order1234'),
+      expect.stringContaining('order123'),
       mockTransaction,
     );
   });
