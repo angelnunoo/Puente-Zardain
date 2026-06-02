@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { EventBusService } from '../common/events/event-bus.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { ZardasService } from '../zardas/zardas.service';
@@ -8,6 +9,13 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderDomain } from './domain/order.entity';
 import { OrdersRepository } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
+
+interface OrderProductSnapshot {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+}
 
 @Injectable()
 export class OrdersService {
@@ -30,7 +38,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = await this.ordersRepository.findProductsByIds(itemIds) as OrderProductSnapshot[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -42,7 +50,7 @@ export class OrdersService {
     let offerNote: string | undefined = undefined;
     let appliedOffer: Awaited<ReturnType<ZardasService['getOffer']>> | undefined;
 
-    const priceMap = new Map(products.map((product) => [product.id, product.price]));
+    const priceMap = new Map<string, number>(products.map((product: OrderProductSnapshot) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
       payload.items.map((item) => ({
         quantity: item.quantity,
@@ -91,9 +99,9 @@ export class OrdersService {
       throw new BadRequestException('El pedido mínimo es de 15 €.');
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const item of payload.items) {
-        const product = products.find((p) => p.id === item.productId);
+        const product = products.find((p: OrderProductSnapshot) => p.id === item.productId);
         if (product && product.stock < item.quantity) {
           throw new BadRequestException(`No hay suficiente stock para ${product.name}`);
         }
@@ -143,7 +151,7 @@ export class OrdersService {
         });
 
         if (stockUpdate.count !== 1) {
-          const product = products.find((p) => p.id === item.productId);
+          const product = products.find((p: OrderProductSnapshot) => p.id === item.productId);
           throw new BadRequestException(`No hay suficiente stock para ${product?.name ?? 'el producto seleccionado'}`);
         }
       }
@@ -180,7 +188,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = await this.ordersRepository.findProductsByIds(itemIds) as OrderProductSnapshot[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -191,7 +199,7 @@ export class OrdersService {
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
 
-    const priceMap = new Map(products.map((product) => [product.id, product.price]));
+    const priceMap = new Map<string, number>(products.map((product: OrderProductSnapshot) => [product.id, product.price]));
     const subtotal = OrderDomain.calculateTotal(
       payload.items.map((item) => ({
         quantity: item.quantity,
@@ -241,7 +249,7 @@ export class OrdersService {
 
     return {
       items: payload.items.map((item) => {
-        const product = products.find((p) => p.id === item.productId);
+        const product = products.find((p: OrderProductSnapshot) => p.id === item.productId);
         return {
           productId: item.productId,
           name: product?.name || 'Producto',
