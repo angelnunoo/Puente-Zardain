@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { DayOfWeek, ShiftType } from '../../../shared/enums';
-import { IScheduleWindow, ISpecialSchedule } from '../../../shared/interfaces';
+import { DayOfWeek, ShiftType } from '../../../../shared/enums';
+import { IScheduleWindow, ISpecialSchedule } from '../../../../shared/interfaces';
 
 export class ScheduleDomain {
   /**
