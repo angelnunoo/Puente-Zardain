@@ -14,7 +14,7 @@ const PaymentMethod = {
 type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod]
 
 export default function CheckoutPage() {
-  const { token, user } = useAuth()
+  const { token, user, loading: authLoading } = useAuth()
   const { addNotification } = useNotifications()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -31,6 +31,10 @@ export default function CheckoutPage() {
   const [selectedRedemption, setSelectedRedemption] = useState<number | null>(null)
 
   useEffect(() => {
+    if (authLoading) {
+      return
+    }
+
     if (!token || !user?.id) {
       router.push('/login')
       return
@@ -82,7 +86,7 @@ export default function CheckoutPage() {
     }
 
     loadPreview()
-  }, [token, router, delivery, address, selectedRedemption, selectedMethod, addNotification, user?.id])
+  }, [token, router, delivery, address, selectedRedemption, selectedMethod, addNotification, user?.id, authLoading])
 
   const handlePaymentMethodChange = (method: PaymentMethod) => {
     setSelectedMethod(method)
@@ -134,7 +138,7 @@ export default function CheckoutPage() {
   }
 
   if (!order) {
-    if (loading) {
+    if (loading || authLoading) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
