@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../../context/AuthContext'
 import { useNotifications } from '../../context/NotificationsContext'
 import { ordersApi, paymentsApi, zardasApi } from '../../lib/api'
-import { PaymentMethod } from '../../../../shared/enums'
+
+const PaymentMethod = {
+  CARD: 'CARD',
+  CASH: 'CASH',
+} as const
+
+type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod]
 
 export default function CheckoutPage() {
   const { token, user } = useAuth()

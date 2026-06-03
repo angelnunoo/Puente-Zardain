@@ -1,5 +1,19 @@
-import { LoginDto, RegisterDto } from '../../../shared/dtos';
-import { PublicScheduleResponse } from '../../../shared/interfaces';
+type LoginDto = {
+  email: string;
+  password: string;
+};
+
+type RegisterDto = {
+  email: string;
+  password: string;
+  phone: string;
+  name: string;
+};
+
+type PublicScheduleResponse = any;
+type ProductResponseDto = any;
+type CreateProductDto = any;
+type UpdateProductDto = any;
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
