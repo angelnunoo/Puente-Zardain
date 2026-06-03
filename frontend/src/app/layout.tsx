@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '../context/AuthContext';
 import { CartProvider } from '../context/CartContext';
+import { NotificationsProvider } from '../context/NotificationsContext';
 import FloatingCartFixed from '../components/home/floating-cart-fixed';
 
 export const metadata: Metadata = {
@@ -18,10 +19,12 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <AuthProvider>
-          <CartProvider>
-            {children}
-            <FloatingCartFixed />
-          </CartProvider>
+          <NotificationsProvider>
+            <CartProvider>
+              {children}
+              <FloatingCartFixed />
+            </CartProvider>
+          </NotificationsProvider>
         </AuthProvider>
       </body>
     </html>
