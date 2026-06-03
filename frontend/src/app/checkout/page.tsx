@@ -5,10 +5,16 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../../context/AuthContext'
 import { useNotifications } from '../../context/NotificationsContext'
 import { ordersApi, paymentsApi, zardasApi } from '../../lib/api'
-import { PaymentMethod } from '../../../../../shared/enums'
+
+const PaymentMethod = {
+  CARD: 'CARD',
+  CASH: 'CASH',
+} as const
+
+type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod]
 
 export default function CheckoutPage() {
-  const { token, user } = useAuth()
+  const { token, user, loading: authLoading } = useAuth()
   const { addNotification } = useNotifications()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -25,6 +31,10 @@ export default function CheckoutPage() {
   const [selectedRedemption, setSelectedRedemption] = useState<number | null>(null)
 
   useEffect(() => {
+    if (authLoading) {
+      return
+    }
+
     if (!token || !user?.id) {
       router.push('/login')
       return
@@ -76,7 +86,7 @@ export default function CheckoutPage() {
     }
 
     loadPreview()
-  }, [token, router, delivery, address, selectedRedemption, selectedMethod, addNotification, user?.id])
+  }, [token, router, delivery, address, selectedRedemption, selectedMethod, addNotification, user?.id, authLoading])
 
   const handlePaymentMethodChange = (method: PaymentMethod) => {
     setSelectedMethod(method)
@@ -128,7 +138,7 @@ export default function CheckoutPage() {
   }
 
   if (!order) {
-    if (loading) {
+    if (loading || authLoading) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
@@ -307,6 +317,7 @@ export default function CheckoutPage() {
                           </div>
 
                         </div>
+                      </div>
                       </label>
                     </div>
                 ))}

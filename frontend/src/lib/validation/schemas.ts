@@ -21,7 +21,7 @@ export const registerSchema = z.object({
     .min(1, 'El email es requerido'),
   phone: z.string()
     .regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/, 'Teléfono inválido')
-    .min(9, 'El teléfono debe tener al menos 9 dígitos'),
+    .min(9, 'El teléfono debe tener al menos 9 dígitos')
     .max(15, 'El teléfono no puede exceder 15 caracteres'),
   password: z.string()
     .min(8, 'La contraseña debe tener al menos 8 caracteres')

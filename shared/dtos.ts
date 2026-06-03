@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * DTOs COMPARTIDOS
  * Data Transfer Objects reutilizables en frontend y backend

@@ -11,6 +11,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class OrdersService {
+  private readonly allowedRedemptionDiscounts = new Set([5, 10, 15]);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersRepository: OrdersRepository,
@@ -21,6 +23,8 @@ export class OrdersService {
 
   async create(userId: string, payload: CreateOrderDto, ip?: string) {
     await this.scheduleService.assertOpenForOrders();
+    await this.assertOrderLimit(userId, ip);
+
     if (payload.delivery && !payload.address) {
       throw new BadRequestException('Delivery orders require an address.');
     }
@@ -41,20 +45,37 @@ export class OrdersService {
     let offerId: string | undefined = undefined;
     let offerNote: string | undefined = undefined;
 
-    const priceMap = new Map(products.map((product) => [product.id, product.price]));
-    const subtotal = OrderDomain.calculateTotal(
-      payload.items.map((item) => ({
+    const productsById = new Map(products.map((product) => [product.id, product]));
+    const orderItems = payload.items.map((item) => {
+      const product = productsById.get(item.productId);
+      if (!product) {
+        throw new BadRequestException('One or more products are invalid or unavailable');
+      }
+
+      const lineSubtotal = Number((product.price * item.quantity).toFixed(2));
+      return {
+        productId: item.productId,
         quantity: item.quantity,
-        price: priceMap.get(item.productId) ?? 0,
-      })),
-    );
+        customizations: item.customizations,
+        price: product.price,
+        subtotal: lineSubtotal,
+        productName: product.name,
+      };
+    });
+    const subtotal = OrderDomain.calculateTotal(orderItems);
 
     const deliveryFee = payload.delivery ? this.calculateDeliveryFee(subtotal) : 0;
     const tax = this.calculateTax(subtotal);
     const baseTotal = subtotal + tax + deliveryFee;
 
+    if (baseTotal > 250) {
+      await this.logFraudAttempt({ userId, ip, reason: 'Importe de pedido superior al límite permitido' });
+      throw new BadRequestException('El importe del pedido supera el máximo permitido.');
+    }
+
+    let offer: Awaited<ReturnType<ZardasService['getOffer']>> | undefined;
     if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
+      offer = await this.zardasService.getOffer(payload.offerId);
       if (!offer.active) {
         throw new BadRequestException('La oferta seleccionada no está disponible.');
       }
@@ -73,14 +94,11 @@ export class OrdersService {
       } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
         discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
       } else if (offer.type === 'PRODUCTO_GRATIS') {
-        offerNote = `Oferta gratis aplicada: ${offer.name}`;
+        throw new BadRequestException('Esta oferta todavía no se puede canjear en pedidos.');
       }
     } else if (payload.redemption) {
       const balance = await this.zardasService.getBalance(userId);
-      if (balance.available < payload.redemption.discountAmount) {
-        throw new BadRequestException('Saldo de Zardas insuficiente');
-      }
-      discount = payload.redemption.discountAmount;
+      discount = this.validateRedemptionDiscount(payload.redemption.discountAmount, balance.available);
     }
 
     const total = Number((baseTotal - discount).toFixed(2));
@@ -90,13 +108,6 @@ export class OrdersService {
     }
 
     const order = await this.prisma.$transaction(async (tx) => {
-      for (const item of payload.items) {
-        const product = products.find((p) => p.id === item.productId);
-        if (product && product.stock < item.quantity) {
-          throw new BadRequestException(`No hay suficiente stock para ${product.name}`);
-        }
-      }
-
       const created = await tx.order.create({
         data: {
           userId,
@@ -113,9 +124,11 @@ export class OrdersService {
           offerId,
           notes: offerNote || undefined,
           items: {
-            create: payload.items.map((item) => ({
+            create: orderItems.map((item) => ({
               productId: item.productId,
               quantity: item.quantity,
+              price: item.price,
+              subtotal: item.subtotal,
               customizations: item.customizations,
             })),
           },
@@ -126,29 +139,46 @@ export class OrdersService {
         },
       });
 
-      for (const item of payload.items) {
-        await tx.product.update({
-          where: { id: item.productId },
+      for (const item of orderItems) {
+        const updatedStock = await tx.product.updateMany({
+          where: {
+            id: item.productId,
+            stock: { gte: item.quantity },
+          },
           data: { stock: { decrement: item.quantity } },
         });
+
+        if (updatedStock.count !== 1) {
+          throw new BadRequestException(`No hay suficiente stock para ${item.productName}`);
+        }
+      }
+
+      if (offer) {
+        await this.zardasService.redeemZardas(
+          userId,
+          offer.cost,
+          `Canje de oferta ${offer.name} en pedido ${created.id.slice(0, 8)}`,
+          created.id,
+          tx,
+        );
+      } else if (payload.redemption && discount > 0) {
+        await this.zardasService.redeemZardas(
+          userId,
+          discount,
+          `Canje en pedido ${created.id.slice(0, 8)}`,
+          created.id,
+          tx,
+        );
       }
 
       await tx.chat.create({
         data: { orderId: created.id },
       });
 
-      this.eventBus.emit('OrderCreated', { orderId: created.id, userId, total });
       return created;
     });
 
-    // Redeem Zardas if applied via offer or old redemption path
-    if (payload.offerId) {
-      const offer = await this.zardasService.getOffer(payload.offerId);
-      await this.zardasService.redeemZardas(userId, offer.cost, `Canje de oferta ${offer.name} en pedido ${order.id.slice(0, 8)}`);
-    } else if (payload.redemption && discount > 0) {
-      await this.zardasService.redeemZardas(userId, discount, `Canje en pedido ${order.id.slice(0, 8)}`);
-    }
-
+    this.eventBus.emit('OrderCreated', { orderId: order.id, userId, total });
     return order;
   }
 
@@ -205,14 +235,11 @@ export class OrdersService {
       } else if (offer.type === 'DESCUENTO_PORCENTAJE') {
         discount = Number((baseTotal * (offer.value / 100)).toFixed(2));
       } else if (offer.type === 'PRODUCTO_GRATIS') {
-        offerNote = `Oferta gratis aplicada: ${offer.name}`;
+        throw new BadRequestException('Esta oferta todavía no se puede canjear en pedidos.');
       }
     } else if (payload.redemption) {
       const balance = await this.zardasService.getBalance(userId);
-      if (balance.available < payload.redemption.discountAmount) {
-        throw new BadRequestException('Saldo de Zardas insuficiente');
-      }
-      discount = payload.redemption.discountAmount;
+      discount = this.validateRedemptionDiscount(payload.redemption.discountAmount, balance.available);
     }
 
     const total = Number((baseTotal - discount).toFixed(2));
@@ -264,6 +291,18 @@ export class OrdersService {
 
   private calculateTax(subtotal: number) {
     return Number((subtotal * 0.1).toFixed(2));
+  }
+
+  private validateRedemptionDiscount(discountAmount: number, availableZardas: number) {
+    if (!this.allowedRedemptionDiscounts.has(discountAmount)) {
+      throw new BadRequestException('El descuento de Zardas seleccionado no es válido.');
+    }
+
+    if (availableZardas < discountAmount) {
+      throw new BadRequestException('Saldo de Zardas insuficiente');
+    }
+
+    return discountAmount;
   }
 
   private async assertOrderLimit(userId: string, ip?: string) {
@@ -318,12 +357,17 @@ export class OrdersService {
     };
   }
 
-  async findAll(user: { id: string; role: string }) {
+  async findAll(user: { id?: string; userId?: string; role: string }) {
     if (!user) {
       throw new BadRequestException('User context is required to list orders');
     }
 
-    return this.ordersRepository.findAllForUser(user.id, user.role as Role);
+    const userId = user.userId ?? user.id;
+    if (!userId) {
+      throw new BadRequestException('User id is required to list orders');
+    }
+
+    return this.ordersRepository.findAllForUser(userId, user.role as Role);
   }
 
   async updateStatus(id: string, payload: UpdateOrderStatusDto) {
@@ -332,7 +376,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    OrderDomain.assertTransitionAllowed(order.status, payload.status);
+    OrderDomain.assertTransitionAllowed(order.status as OrderStatus, payload.status);
 
     const updated = await this.ordersRepository.updateStatus(id, payload.status);
 
@@ -345,8 +389,14 @@ export class OrdersService {
     if (payload.status === OrderStatus.READY && !order.zardasAwarded) {
       const zardasEarned = Math.floor(order.total / 5);
       if (zardasEarned > 0) {
-        await this.zardasService.addZardas(order.userId, zardasEarned, `Pedido ${order.id.slice(0, 8)} completado`, 'ORDER_COMPLETION', order.id);
-        await this.prisma.order.update({ where: { id }, data: { zardasAwarded: true } });
+        const marked = await this.prisma.order.updateMany({
+          where: { id, zardasAwarded: false },
+          data: { zardasAwarded: true },
+        });
+
+        if (marked.count === 1) {
+          await this.zardasService.addZardas(order.userId, zardasEarned, `Pedido ${order.id.slice(0, 8)} completado`, 'ORDER_COMPLETION', order.id);
+        }
       }
     }
 

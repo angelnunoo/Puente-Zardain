@@ -20,7 +20,7 @@ type AuthContextValue = AuthState & {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 // Helper para verificar si el token está expirado
-const isTokenExpired = (token: string): boolean => {
+const checkTokenExpired = (token: string): boolean => {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const currentTime = Date.now() / 1000;
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isTokenExpired = useMemo(() => {
     if (!token) return true;
-    return isTokenExpired(token);
+    return checkTokenExpired(token);
   }, [token]);
 
   useEffect(() => {

@@ -26,7 +26,7 @@ interface ZardasData {
 }
 
 export default function ZardasLoyaltyFixed() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [zardas, setZardas] = useState<ZardasData>({
     current: 0,
     totalEarned: 0,
@@ -51,14 +51,38 @@ export default function ZardasLoyaltyFixed() {
       setError(null);
       
       try {
-        // Conexión REAL con backend a través de zardasApi
-        const data = await zardasApi.getLoyaltyData(token);
-        
-        if (data) {
-          setZardas(data);
-        } else {
-          throw new Error('No se pudieron obtener los datos de Zardas');
+        if (!user?.id) {
+          throw new Error('Usuario no autenticado');
         }
+
+        const [balance, history] = await Promise.all([
+          zardasApi.getBalance(token, user.id),
+          zardasApi.getHistory(token, user.id),
+        ]);
+
+        const nextLeague = balance.available >= 1000 ? 'Platino' : balance.available >= 500 ? 'Platino' : balance.available >= 200 ? 'Oro' : 'Plata';
+        const nextThreshold = balance.available >= 1000 ? balance.available : balance.available >= 500 ? 1000 : balance.available >= 200 ? 500 : 200;
+
+        setZardas({
+          current: balance.available,
+          totalEarned: balance.total,
+          currentLeague: balance.league,
+          nextLeague,
+          zardasToNextLeague: Math.max(nextThreshold - balance.available, 0),
+          currentReward: {
+            id: 'discount-5',
+            name: '5€ de descuento',
+            description: 'Canjea 5 Zardas por 5€ de descuento',
+            zardasNeeded: 5,
+            isAvailable: balance.available >= 5,
+          },
+          recentActivity: history.slice(0, 5).map((entry: any) => ({
+            id: entry.id,
+            description: entry.reason || entry.type,
+            zardas: entry.amount,
+            date: entry.createdAt,
+          })),
+        });
       } catch (error) {
         console.error('Error fetching Zardas data:', error);
         setError('No se puede cargar la información de lealtad');
@@ -104,7 +128,7 @@ export default function ZardasLoyaltyFixed() {
     // Actualizar cada 5 minutos
     const interval = setInterval(fetchZardasData, 300000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, user?.id]);
 
   const getLeagueColor = (league: string) => {
     switch (league) {
