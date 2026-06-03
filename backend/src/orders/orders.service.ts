@@ -376,7 +376,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    OrderDomain.assertTransitionAllowed(order.status, payload.status);
+    OrderDomain.assertTransitionAllowed(order.status as OrderStatus, payload.status);
 
     const updated = await this.ordersRepository.updateStatus(id, payload.status);
 

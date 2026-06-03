@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentMethod, Role } from '../../../shared/enums';
 
@@ -107,7 +108,7 @@ export class PaymentsService {
       tax: order.tax,
       deliveryFee: order.deliveryFee,
       total: order.total,
-      paymentMethod: order.paymentMethod
+      paymentMethod: order.paymentMethod as PaymentMethod
     };
 
     // Generar número de factura
@@ -119,7 +120,7 @@ export class PaymentsService {
         orderId: order.id,
         userId: order.userId,
         invoiceNumber,
-        data: invoiceData,
+        data: invoiceData as unknown as Prisma.InputJsonValue,
         pdfUrl: `/invoices/${invoiceNumber}.pdf`, // URL simulada
         createdAt: new Date(),
       }
@@ -170,7 +171,7 @@ export class PaymentsService {
     const paymentMethodStats = orders.reduce((stats, order) => {
       stats[order.paymentMethod] = (stats[order.paymentMethod] || 0) + 1;
       return stats;
-    }, {} as Record<PaymentMethod, number>);
+    }, {} as Record<string, number>);
 
     return {
       totalOrders: orders.length,
