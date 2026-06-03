@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { ZardasService } from './zardas.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -9,21 +9,31 @@ import { Role } from '../../../shared/enums';
 export class ZardasController {
   constructor(private zardasService: ZardasService) {}
 
+  private assertCanAccessZardas(req: any, userId: string) {
+    const currentUserId = req.user?.userId ?? req.user?.id;
+    if (currentUserId !== userId && req.user?.role !== Role.ADMIN) {
+      throw new ForbiddenException('No tienes permiso para acceder a estos Zardas.');
+    }
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get(':userId/balance')
-  getBalance(@Param('userId') userId: string) {
+  getBalance(@Param('userId') userId: string, @Req() req: any) {
+    this.assertCanAccessZardas(req, userId);
     return this.zardasService.getBalance(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':userId/history')
-  getHistory(@Param('userId') userId: string) {
+  getHistory(@Param('userId') userId: string, @Req() req: any) {
+    this.assertCanAccessZardas(req, userId);
     return this.zardasService.getHistory(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':userId/redeem')
-  redeemZardas(@Param('userId') userId: string, @Body() body: { discountAmount: number; reason: string }) {
+  redeemZardas(@Param('userId') userId: string, @Body() body: { discountAmount: number; reason: string }, @Req() req: any) {
+    this.assertCanAccessZardas(req, userId);
     return this.zardasService.redeemZardas(userId, body.discountAmount, body.reason);
   }
 

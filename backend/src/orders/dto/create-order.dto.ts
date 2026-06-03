@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsIn, IsNotEmpty, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
 import { PaymentMethod } from '../../../shared/enums';
 
 export class OrderItemDto {
@@ -17,6 +17,7 @@ export class OrderItemDto {
 
 export class RedemptionDto {
   @IsPositive()
+  @IsIn([5, 10, 15])
   discountAmount: number;
 }
 
@@ -58,6 +59,10 @@ export class CreateOrderDto {
 
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
+
+  @IsOptional()
+  @IsString()
+  offerId?: string;
 
   @IsOptional()
   @ValidateNested()

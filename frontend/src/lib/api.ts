@@ -294,12 +294,49 @@ export const analyticsApi = {
       method: 'GET',
     });
   },
+  getDashboardMetrics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/dashboard${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+  getSalesReport(token: string | null, period: string, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/sales/${period}${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+  getCustomerAnalytics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/customers${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+  getProductAnalytics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/products${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+  getFinancialAnalytics(token: string | null, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/financial${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
+  exportReport(token: string | null, type: string, queryParams: string = '') {
+    return authorizedRequest<any>(token, `/analytics/reports/export/${type}${queryParams ? `?${queryParams}` : ''}`, {
+      method: 'GET',
+    });
+  },
 };
 
 export const zardasApi = {
-  getLoyaltyData(token: string | null) {
-    return authorizedRequest(token, '/zardas/loyalty', {
-      method: 'GET',
+  getBalance(token: string | null, userId: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/balance`, { method: 'GET' });
+  },
+  getHistory(token: string | null, userId: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/history`, { method: 'GET' });
+  },
+  redeemZardas(token: string | null, userId: string, discountAmount: number, reason: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/redeem`, {
+      method: 'POST',
+      body: JSON.stringify({ discountAmount, reason }),
     });
   },
 };
@@ -403,50 +440,6 @@ export const paymentsApi = {
   },
 };
 
-export const analyticsApi = {
-  // Dashboard metrics
-  getDashboardMetrics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/dashboard${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Sales reports
-  getSalesReport(token: string | null, period: string, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/sales/${period}${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Customer analytics
-  getCustomerAnalytics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/customers${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Product analytics
-  getProductAnalytics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/products${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Financial analytics
-  getFinancialAnalytics(token: string | null, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/financial${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-
-  // Export reports
-  exportReport(token: string | null, type: string, queryParams: string = '') {
-    return authorizedRequest<any>(token, `/analytics/reports/export/${type}${queryParams ? `?${queryParams}` : ''}`, {
-      method: 'GET',
-    });
-  },
-};
-
 export const incidentsApi = {
   // Gestión de incidencias
   getIncidents(token: string | null, queryParams: string = '') {
@@ -499,21 +492,6 @@ export const incidentsApi = {
     return authorizedRequest<any>(token, '/incidents/auto-close', {
       method: 'POST',
       body: JSON.stringify({ hoursInactive }),
-    });
-  },
-};
-
-export const zardasApi = {
-  getBalance(token: string | null, userId: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}/balance`, { method: 'GET' });
-  },
-  getHistory(token: string | null, userId: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}/history`, { method: 'GET' });
-  },
-  redeemZardas(token: string | null, userId: string, discountAmount: number, reason: string) {
-    return authorizedRequest<any>(token, `/zardas/${userId}/redeem`, {
-      method: 'POST',
-      body: JSON.stringify({ discountAmount, reason }),
     });
   },
 };

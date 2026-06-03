@@ -1,133 +1,69 @@
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { EventBusService } from '../common/events/event-bus.service';
-import { OrderStatus, PaymentMethod, Role } from '../../../shared/enums';
+import { ForbiddenException } from '@nestjs/common';
+import { PaymentMethod, Role } from '../../../shared/enums';
 
 const mockPrismaService = {
   order: {
     findUnique: jest.fn(),
-    update: jest.fn(),
+    findMany: jest.fn(),
   },
-};
-
-const mockStripeClient = {
-  paymentIntents: {
+  invoice: {
     create: jest.fn(),
-    retrieve: jest.fn(),
+    findMany: jest.fn(),
   },
-  refunds: {
-    create: jest.fn(),
-  },
-};
-
-const mockEventBus = {
-  emit: jest.fn(),
 };
 
 describe('PaymentsService', () => {
   let service: PaymentsService;
 
   beforeEach(() => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_123';
     jest.clearAllMocks();
-    service = new PaymentsService(
-      mockPrismaService as unknown as PrismaService,
-      mockEventBus as unknown as EventBusService,
-    );
-    (service as any).stripe = mockStripeClient;
+    service = new PaymentsService(mockPrismaService as unknown as PrismaService);
   });
 
-  it('should confirm and mark order paid when payment intent succeeds', async () => {
-    mockPrismaService.order.findUnique.mockResolvedValue({ id: 'order1', status: OrderStatus.PENDING });
-    mockPrismaService.order.update.mockResolvedValue({ id: 'order1', paymentStatus: 'SUCCEEDED', status: OrderStatus.CONFIRMED });
-
-    const event = {
-      type: 'payment_intent.succeeded',
-      data: {
-        object: {
-          metadata: { orderId: 'order1' },
-        },
-      },
-    } as any;
-
-    const result = await service.handleWebhook(event);
-
-    expect(mockPrismaService.order.findUnique).toHaveBeenCalledWith({ where: { id: 'order1' } });
-    expect(mockPrismaService.order.update).toHaveBeenCalledWith({
-      where: { id: 'order1' },
-      data: {
-        paymentStatus: 'SUCCEEDED',
-        status: OrderStatus.CONFIRMED,
-      },
-    });
-    expect(result).toEqual({ received: true });
-    expect(mockEventBus.emit).toHaveBeenCalledWith('OrderStatusChanged', {
-      orderId: 'order1',
-      previousStatus: OrderStatus.PENDING,
-      newStatus: OrderStatus.CONFIRMED,
-    });
-  });
-
-  it('should create a payment intent only for the order owner', async () => {
+  it('should generate an invoice for the order owner', async () => {
     mockPrismaService.order.findUnique.mockResolvedValue({
       id: 'order2',
       userId: 'user-1',
-      status: OrderStatus.PENDING,
-      paymentMethod: PaymentMethod.CARD,
       total: 20,
+      subtotal: 18,
+      tax: 2,
+      deliveryFee: 0,
+      paymentMethod: PaymentMethod.CASH,
+      user: { name: 'Ana', email: 'ana@example.com', phone: '600000000' },
+      items: [{ quantity: 2, price: 9, product: { name: 'Tortilla' } }],
     });
-    mockStripeClient.paymentIntents.create.mockResolvedValue({ id: 'pi_123', client_secret: 'secret' });
-    mockPrismaService.order.update.mockResolvedValue({ id: 'order2', paymentIntentId: 'pi_123' });
+    mockPrismaService.invoice.create.mockResolvedValue({ id: 'inv-1', orderId: 'order2' });
 
-    const result = await service.createPaymentIntent('order2', { userId: 'user-1', role: Role.USER });
+    const result = await service.generateInvoice('order2', { userId: 'user-1', role: Role.USER });
 
-    expect(mockPrismaService.order.findUnique).toHaveBeenCalledWith({ where: { id: 'order2' } });
-    expect(mockStripeClient.paymentIntents.create).toHaveBeenCalledWith({
-      amount: 2000,
-      currency: 'eur',
-      metadata: { orderId: 'order2' },
-      automatic_payment_methods: { enabled: true },
+    expect(mockPrismaService.invoice.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId: 'order2',
+        userId: 'user-1',
+        invoiceNumber: expect.stringMatching(/^INV-\d{4}-/),
+      }),
     });
-    expect(mockPrismaService.order.update).toHaveBeenCalledWith({
-      where: { id: 'order2' },
-      data: { paymentIntentId: 'pi_123' },
-    });
-    expect(result).toEqual({ clientSecret: 'secret' });
+    expect(result).toEqual({ id: 'inv-1', orderId: 'order2' });
   });
 
-  it('should prevent non-owners from creating a payment intent', async () => {
+  it('should prevent non-owners from generating another user invoice', async () => {
     mockPrismaService.order.findUnique.mockResolvedValue({
       id: 'order2',
       userId: 'user-1',
-      status: OrderStatus.PENDING,
-      paymentMethod: PaymentMethod.CARD,
-      total: 20,
+      user: { name: 'Ana', email: 'ana@example.com', phone: '600000000' },
+      items: [],
     });
 
     await expect(
-      service.createPaymentIntent('order2', { userId: 'user-2', role: Role.USER }),
-    ).rejects.toThrow('No tienes permiso para pagar este pedido.');
+      service.generateInvoice('order2', { userId: 'user-2', role: Role.USER }),
+    ).rejects.toThrow(ForbiddenException);
   });
 
-  it('should update refund status when charge is refunded', async () => {
-    mockPrismaService.order.update.mockResolvedValue({ id: 'order1', paymentStatus: 'REFUNDED' });
+  it('should return enabled in-person payment methods for an amount', async () => {
+    const result = await service.getAvailablePaymentMethods(25);
 
-    const event = {
-      type: 'charge.refunded',
-      data: {
-        object: {
-          metadata: { orderId: 'order1' },
-        },
-      },
-    } as any;
-
-    const result = await service.handleWebhook(event);
-
-    expect(mockPrismaService.order.update).toHaveBeenCalledWith({
-      where: { id: 'order1' },
-      data: { paymentStatus: 'REFUNDED' },
-    });
-    expect(result).toEqual({ received: true });
-    expect(mockEventBus.emit).not.toHaveBeenCalledWith('OrderStatusChanged', expect.anything());
+    expect(result.map((method) => method.type)).toEqual([PaymentMethod.CARD, PaymentMethod.CASH]);
   });
 });

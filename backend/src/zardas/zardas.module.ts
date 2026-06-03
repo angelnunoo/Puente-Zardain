@@ -5,5 +5,6 @@ import { ZardasController } from './zardas.controller';
 @Module({
   providers: [ZardasService],
   controllers: [ZardasController],
+  exports: [ZardasService],
 })
 export class ZardasModule {}

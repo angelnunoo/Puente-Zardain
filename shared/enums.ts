@@ -10,6 +10,8 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
+export { UserRole as Role };
+
 export enum UserLeague {
   BRONZE = 'BRONZE',
   SILVER = 'SILVER',

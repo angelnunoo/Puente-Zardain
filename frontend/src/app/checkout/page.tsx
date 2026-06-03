@@ -307,6 +307,7 @@ export default function CheckoutPage() {
                           </div>
 
                         </div>
+                      </div>
                       </label>
                     </div>
                 ))}
