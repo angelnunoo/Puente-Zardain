@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, OrderStatus } from '../../../shared/enums';
 
@@ -9,6 +9,9 @@ export class OrdersRepository {
   async findAllForUser(userId: string, role: Role) {
     if (role === Role.ADMIN) {
       return this.prisma.order.findMany({ include: { items: true, user: true } });
+    }
+    if (!userId) {
+      throw new BadRequestException('User identifier is required to list orders');
     }
     return this.prisma.order.findMany({ where: { userId }, include: { items: true, user: true } });
   }
@@ -32,7 +35,7 @@ export class OrdersRepository {
   }
 
   async averageDeliveredMinutes() {
-    const deliveries = await this.prisma.order.findMany({
+    const deliveries: Array<{ createdAt: Date; updatedAt: Date }> = await this.prisma.order.findMany({
       where: { status: OrderStatus.DELIVERED },
       select: { createdAt: true, updatedAt: true },
     });
@@ -41,7 +44,7 @@ export class OrdersRepository {
       return 20;
     }
 
-    const totalMinutes = deliveries.reduce((sum, order) => {
+    const totalMinutes = deliveries.reduce((sum: number, order) => {
       const delta = order.updatedAt.getTime() - order.createdAt.getTime();
       return sum + delta / 60000;
     }, 0);

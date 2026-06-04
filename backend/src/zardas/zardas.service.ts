@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -26,7 +27,7 @@ export class ZardasService {
   }
 
   async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Crear transacción
       await tx.zardasTransaction.create({
         data: {
@@ -78,13 +79,25 @@ export class ZardasService {
     });
   }
 
+  async getOffer(offerId: string) {
+    return this.prisma.zardasOffer.findUniqueOrThrow({ where: { id: offerId } });
+  }
+
+  getLeagueRank(league: string) {
+    const normalized = league.toLowerCase();
+    if (normalized.includes('platino') || normalized.includes('platinum')) return 4;
+    if (normalized.includes('oro') || normalized.includes('gold')) return 3;
+    if (normalized.includes('plata') || normalized.includes('silver')) return 2;
+    return 1;
+  }
+
   async redeemZardas(userId: string, discountAmount: number, reason: string) {
     const balance = await this.prisma.zardasBalance.findUnique({ where: { userId } });
     if (!balance || balance.available < discountAmount) {
       throw new Error('Saldo insuficiente');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Crear transacción negativa
       await tx.zardasTransaction.create({
         data: {
@@ -113,7 +126,5 @@ export class ZardasService {
 
   async adjustZardas(userId: string, amount: number, reason: string, adminId: string) {
     return this.addZardas(userId, amount, reason, 'MANUAL_ADJUSTMENT', undefined, adminId);
-  }
-    };
   }
 }

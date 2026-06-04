@@ -4,12 +4,12 @@ import { OrdersRepository } from './orders.repository';
 import { EventBusService } from '../common/events/event-bus.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { OrderStatus, PaymentMethod } from '../../../shared/enums';
+import { OrderStatus, PaymentMethod, Role } from '../../../shared/enums';
+import { ScheduleService } from '../schedule/schedule.service';
+import { ZardasService } from '../zardas/zardas.service';
 
 const mockPrismaService = {
   order: {
-    findUnique: jest.fn(),
-    findMany: jest.fn(),
     update: jest.fn(),
   },
   $transaction: jest.fn(),
@@ -17,10 +17,25 @@ const mockPrismaService = {
 
 const mockOrdersRepository = {
   findProductsByIds: jest.fn(),
+  findAllForUser: jest.fn(),
+  findById: jest.fn(),
+  updateStatus: jest.fn(),
 };
 
 const mockEventBus = {
   emit: jest.fn(),
+};
+
+const mockScheduleService = {
+  assertOpenForOrders: jest.fn(),
+};
+
+const mockZardasService = {
+  addZardas: jest.fn(),
+  getBalance: jest.fn(),
+  getOffer: jest.fn(),
+  getLeagueRank: jest.fn(),
+  redeemZardas: jest.fn(),
 };
 
 describe('OrdersService', () => {
@@ -33,6 +48,8 @@ describe('OrdersService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: OrdersRepository, useValue: mockOrdersRepository },
         { provide: EventBusService, useValue: mockEventBus },
+        { provide: ScheduleService, useValue: mockScheduleService },
+        { provide: ZardasService, useValue: mockZardasService },
       ],
     }).compile();
 
@@ -41,6 +58,20 @@ describe('OrdersService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('lists only the authenticated user orders using the JWT userId field', async () => {
+    mockOrdersRepository.findAllForUser.mockResolvedValue([{ id: 'order-1', userId: 'user-1' }]);
+
+    const result = await service.findAll({ userId: 'user-1', role: Role.USER });
+
+    expect(result).toEqual([{ id: 'order-1', userId: 'user-1' }]);
+    expect(mockOrdersRepository.findAllForUser).toHaveBeenCalledWith('user-1', Role.USER);
+  });
+
+  it('rejects order listing when the authenticated user has no identifier', async () => {
+    await expect(service.findAll({ role: Role.USER } as any)).rejects.toThrow(BadRequestException);
+    expect(mockOrdersRepository.findAllForUser).not.toHaveBeenCalled();
   });
 
   it('should reject delivery orders without address', async () => {
@@ -66,8 +97,8 @@ describe('OrdersService', () => {
   });
 
   it('should update order status only on valid transition', async () => {
-    mockPrismaService.order.findUnique.mockResolvedValue({ id: 'o1', status: OrderStatus.PENDING });
-    mockPrismaService.order.update.mockResolvedValue({ id: 'o1', status: OrderStatus.CONFIRMED });
+    mockOrdersRepository.findById.mockResolvedValue({ id: 'o1', status: OrderStatus.PENDING });
+    mockOrdersRepository.updateStatus.mockResolvedValue({ id: 'o1', status: OrderStatus.CONFIRMED });
 
     const result = await service.updateStatus('o1', { status: OrderStatus.CONFIRMED } as any);
 
@@ -76,7 +107,7 @@ describe('OrdersService', () => {
   });
 
   it('should throw if order id does not exist', async () => {
-    mockPrismaService.order.findUnique.mockResolvedValue(null);
+    mockOrdersRepository.findById.mockResolvedValue(null);
 
     await expect(service.updateStatus('missing', { status: OrderStatus.CONFIRMED } as any)).rejects.toThrow(NotFoundException);
   });

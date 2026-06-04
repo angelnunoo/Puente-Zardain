@@ -15,16 +15,16 @@ export function LogMethod(context?: string) {
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (this: any, ...args: any[]) {
       const methodName = `${target.constructor.name}.${propertyKey}`;
       const contextStr = context ? ` [${context}]` : '';
-      const correlationId = this.requestContext?.requestId || 'unknown';
+      const correlationId = this?.requestContext?.requestId || 'unknown';
 
       const logPrefix = `[${correlationId}] ${methodName}${contextStr}`;
 
       try {
         logger.debug(`${logPrefix} - START`, {
-          args: this.sanitizeArgs(args),
+          args: sanitizeArgs(args),
         });
 
         const startTime = Date.now();
@@ -56,7 +56,7 @@ export function LogMethodSync(context?: string) {
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
-    descriptor.value = function (...args: any[]) {
+    descriptor.value = function (this: any, ...args: any[]) {
       const methodName = `${target.constructor.name}.${propertyKey}`;
       const contextStr = context ? ` [${context}]` : '';
 
