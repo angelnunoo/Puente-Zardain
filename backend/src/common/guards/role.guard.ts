@@ -5,7 +5,7 @@
 
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { UserRole } from '../../../shared/enums';
+import { UserRole } from '../../../../shared/enums';
 
 export const ROLES_KEY = 'roles';
 
