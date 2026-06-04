@@ -9,6 +9,12 @@ import { OrderDomain } from './domain/order.entity';
 import { OrdersRepository } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
+type AuthenticatedUser = {
+  userId?: string;
+  id?: string;
+  role: Role | string;
+};
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -318,12 +324,17 @@ export class OrdersService {
     };
   }
 
-  async findAll(user: { id: string; role: string }) {
+  async findAll(user: AuthenticatedUser) {
     if (!user) {
       throw new BadRequestException('User context is required to list orders');
     }
 
-    return this.ordersRepository.findAllForUser(user.id, user.role as Role);
+    const userId = user.userId ?? user.id;
+    if (!userId) {
+      throw new BadRequestException('User identifier is required to list orders');
+    }
+
+    return this.ordersRepository.findAllForUser(userId, user.role as Role);
   }
 
   async updateStatus(id: string, payload: UpdateOrderStatusDto) {
