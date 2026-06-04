@@ -35,7 +35,7 @@ export class OrdersRepository {
   }
 
   async averageDeliveredMinutes() {
-    const deliveries = await this.prisma.order.findMany({
+    const deliveries: Array<{ createdAt: Date; updatedAt: Date }> = await this.prisma.order.findMany({
       where: { status: OrderStatus.DELIVERED },
       select: { createdAt: true, updatedAt: true },
     });
@@ -44,7 +44,7 @@ export class OrdersRepository {
       return 20;
     }
 
-    const totalMinutes = deliveries.reduce((sum, order) => {
+    const totalMinutes = deliveries.reduce((sum: number, order) => {
       const delta = order.updatedAt.getTime() - order.createdAt.getTime();
       return sum + delta / 60000;
     }, 0);
