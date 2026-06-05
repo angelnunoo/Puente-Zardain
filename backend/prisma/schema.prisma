@@ -23,6 +23,7 @@ model User {
   twoFactorCode        String?
   twoFactorCodeExpires DateTime?
   orders               Order[]
+  invoices             Invoice[]
   reviews              Review[]
   chats                Chat[]
   cart                 Cart?
@@ -93,6 +94,7 @@ model Order {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   chat            Chat?
+  invoices        Invoice[]
   incidences      Incidence[]
 
   @@index([userId])
@@ -147,6 +149,22 @@ model FraudAttempt {
   phone     String?
   reason    String
   createdAt DateTime @default(now())
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceNumber String   @unique
+  data          Json
+  pdfUrl        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
 }
 
 // ==================== ESTADO DE COCINA ====================

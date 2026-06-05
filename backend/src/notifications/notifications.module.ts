@@ -3,10 +3,8 @@ import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsService } from './notifications.service';
 
 @Module({
-  imports: [
-    NotificationsGateway,
-  ],
   providers: [
+    NotificationsGateway,
     NotificationsService,
   ],
   exports: [
