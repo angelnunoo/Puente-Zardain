@@ -148,7 +148,7 @@ export interface IScheduleWindow {
   openTime: string;
   closeTime: string;
   active: boolean;
-  note?: string;
+  note?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -156,10 +156,10 @@ export interface IScheduleWindow {
 export interface ISpecialSchedule {
   id: string;
   date: Date;
-  openTime?: string;
-  closeTime?: string;
+  openTime?: string | null;
+  closeTime?: string | null;
   isClosed: boolean;
-  note?: string;
+  note?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

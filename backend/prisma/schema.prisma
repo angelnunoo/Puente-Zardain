@@ -25,7 +25,6 @@ model User {
   orders               Order[]
   invoices             Invoice[]
   reviews              Review[]
-  chats                Chat[]
   cart                 Cart?
   refreshTokens        RefreshToken[]
   passwordResets       PasswordResetToken[]
@@ -64,7 +63,6 @@ model Ingredient {
   required   Boolean   @default(true)
   productId  String
   product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems OrderItem[]
 }
 
 model Order {
@@ -184,6 +182,7 @@ model KitchenState {
 model ZardasTransaction {
   id          String   @id @default(cuid())
   userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount      Int      // puntos (positivo o negativo)
   type        String   // ZARDAS_COMPENSATION, BIRTHDAY_BONUS, LOYALTY_MILESTONE, REFERRAL_BONUS, MANUAL
   reason      String
@@ -200,6 +199,7 @@ model ZardasTransaction {
 model ZardasBalance {
   id        String   @id @default(cuid())
   userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   total     Int      @default(0)
   available Int      @default(0)
   pending   Int      @default(0)
@@ -218,6 +218,7 @@ model ZardasOffer {
   description String?
   leagueMin  String?
   active     Boolean   @default(true)
+  orders     Order[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
@@ -233,7 +234,9 @@ enum OfferType {
 model Incidence {
   id          String   @id @default(cuid())
   orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        String   // ORDER_LATE, WRONG_ORDER, QUALITY_ISSUE, MISSING_ITEM, OTHER
   description String?
   resolved    Boolean  @default(false)
@@ -333,7 +336,9 @@ model SalesPrediction {
 model UserFavorite {
   id        String   @id @default(cuid())
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   customizations String? // Personalizaciones guardadas
   notes     String?  // Notas persistentes del cliente
   addedAt   DateTime @default(now())
@@ -349,6 +354,7 @@ model UserFavorite {
 model SavedAddress {
   id        String   @id @default(cuid())
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   label     String   // "Casa", "Trabajo", etc.
   street    String
   number    String
