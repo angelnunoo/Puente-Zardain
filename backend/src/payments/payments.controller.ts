@@ -23,12 +23,54 @@ import { Role, PaymentMethod } from '../../../shared/enums';
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  // ==================== MÉTODOS DE PAGO ====================
+
   @Get('methods')
   @UseGuards(JwtAuthGuard)
   async getAvailablePaymentMethods(@Query('amount') amount: string) {
     const orderAmount = amount ? parseFloat(amount) : 0;
     return this.paymentsService.getAvailablePaymentMethods(orderAmount);
   }
+
+  @Post('stripe/intent')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createStripeIntent(@Req() req: any, @Body() body: { orderId: string }) {
+    return this.paymentsService.createPaymentIntent(body.orderId, req.user);
+  }
+
+  @Post('paypal/create')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createPayPalPayment(@Req() req: any, @Body() body: { orderId: string }) {
+    return this.paymentsService.createPayPalPayment(body.orderId, req.user);
+  }
+
+  @Post('bizum/create')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createBizumPayment(@Req() req: any, @Body() body: { orderId: string }) {
+    return this.paymentsService.createBizumPayment(body.orderId, req.user);
+  }
+
+  @Post('cash/process')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async processCashPayment(@Req() req: any, @Body() body: { orderId: string }) {
+    return this.paymentsService.processCashPayment(body.orderId, req.user);
+  }
+
+  // ==================== REEMBOLSOS ====================
+
+  @Post('refund')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async refund(@Body() body: { paymentIntentId: string; reason?: string }) {
+    return this.paymentsService.refundPayment(body.paymentIntentId, body.reason);
+  }
+
+  // ==================== FACTURACIÓN ====================
 
   @Post('invoices/generate/:orderId')
   @UseGuards(JwtAuthGuard)
@@ -42,6 +84,20 @@ export class PaymentsController {
   async getInvoices(@Req() req: any) {
     return this.paymentsService.getInvoices(req.user.userId);
   }
+
+  @Get('invoices/:invoiceId')
+  @UseGuards(JwtAuthGuard)
+  async getInvoice(@Param('invoiceId') invoiceId: string) {
+    // Este endpoint podría devolver el PDF de la factura
+    return { message: 'Invoice PDF endpoint - to be implemented', invoiceId };
+  }
+
+  // ==================== WEBHOOKS ====================
+
+  @Post('stripe/webhook')
+  async stripeWebhook(@Req() req: any, @Headers('stripe-signature') signature: string) {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
       throw new InternalServerErrorException('Stripe webhook secret not configured');
     }
     if (!signature) {
