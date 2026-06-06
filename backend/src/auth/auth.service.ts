@@ -110,8 +110,7 @@ export class AuthService {
     });
 
     return {
-      message: 'Token de recuperación generado. Úselo para resetear la contraseña.',
-      resetToken: token,
+      message: 'Si el email existe, recibirás instrucciones para restablecer la contraseña.',
     };
   }
 
