@@ -116,6 +116,8 @@ export class OrdersService {
             create: payload.items.map((item) => ({
               productId: item.productId,
               quantity: item.quantity,
+              price: priceMap.get(item.productId) ?? 0,
+              subtotal: (priceMap.get(item.productId) ?? 0) * item.quantity,
               customizations: item.customizations,
             })),
           },
@@ -318,12 +320,18 @@ export class OrdersService {
     };
   }
 
-  async findAll(user: { id: string; role: string }) {
+  async findAll(user: { userId?: string; id?: string; role: string }) {
     if (!user) {
       throw new BadRequestException('User context is required to list orders');
     }
 
-    return this.ordersRepository.findAllForUser(user.id, user.role as Role);
+    const role = user.role as Role;
+    const userId = user.userId ?? user.id;
+    if (role !== Role.ADMIN && !userId) {
+      throw new BadRequestException('User id is required to list orders');
+    }
+
+    return this.ordersRepository.findAllForUser(userId, role);
   }
 
   async updateStatus(id: string, payload: UpdateOrderStatusDto) {

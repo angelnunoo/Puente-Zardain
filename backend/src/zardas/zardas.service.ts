@@ -114,6 +114,4 @@ export class ZardasService {
   async adjustZardas(userId: string, amount: number, reason: string, adminId: string) {
     return this.addZardas(userId, amount, reason, 'MANUAL_ADJUSTMENT', undefined, adminId);
   }
-    };
-  }
 }
