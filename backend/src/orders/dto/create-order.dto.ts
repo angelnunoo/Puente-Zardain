@@ -63,4 +63,8 @@ export class CreateOrderDto {
   @ValidateNested()
   @Type(() => RedemptionDto)
   redemption?: RedemptionDto;
+
+  @IsOptional()
+  @IsString()
+  offerId?: string;
 }

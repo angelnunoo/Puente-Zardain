@@ -9,6 +9,13 @@ import { OrderDomain } from './domain/order.entity';
 import { OrdersRepository } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
+type ProductSnapshot = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+};
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -30,7 +37,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = (await this.ordersRepository.findProductsByIds(itemIds)) as ProductSnapshot[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -89,7 +96,7 @@ export class OrdersService {
       throw new BadRequestException('El pedido mínimo es de 15 €.');
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx: any) => {
       for (const item of payload.items) {
         const product = products.find((p) => p.id === item.productId);
         if (product && product.stock < item.quantity) {
@@ -116,6 +123,8 @@ export class OrdersService {
             create: payload.items.map((item) => ({
               productId: item.productId,
               quantity: item.quantity,
+              price: priceMap.get(item.productId) ?? 0,
+              subtotal: (priceMap.get(item.productId) ?? 0) * item.quantity,
               customizations: item.customizations,
             })),
           },
@@ -162,7 +171,7 @@ export class OrdersService {
     }
 
     const itemIds = payload.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(itemIds);
+    const products = (await this.ordersRepository.findProductsByIds(itemIds)) as ProductSnapshot[];
 
     if (products.length !== itemIds.length) {
       throw new BadRequestException('One or more products are invalid or unavailable');
@@ -318,12 +327,18 @@ export class OrdersService {
     };
   }
 
-  async findAll(user: { id: string; role: string }) {
+  async findAll(user: { userId?: string; id?: string; role: string }) {
     if (!user) {
       throw new BadRequestException('User context is required to list orders');
     }
 
-    return this.ordersRepository.findAllForUser(user.id, user.role as Role);
+    const role = user.role as Role;
+    const userId = user.userId ?? user.id;
+    if (role !== Role.ADMIN && !userId) {
+      throw new BadRequestException('User id is required to list orders');
+    }
+
+    return this.ordersRepository.findAllForUser(userId, role);
   }
 
   async updateStatus(id: string, payload: UpdateOrderStatusDto) {
