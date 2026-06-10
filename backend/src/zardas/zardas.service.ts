@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -25,8 +25,31 @@ export class ZardasService {
     }
   }
 
+  getLeagueRank(league: string) {
+    const ranks: Record<string, number> = {
+      Novato: 0,
+      'Bronce Zarda': 1,
+      BRONZE: 1,
+      'Plata Zarda': 2,
+      SILVER: 2,
+      'Oro Zarda': 3,
+      GOLD: 3,
+      'Platino Zarda': 4,
+      PLATINUM: 4,
+    };
+    return ranks[league] ?? 0;
+  }
+
+  async getOffer(offerId: string) {
+    const offer = await (this.prisma as any).zardasOffer.findUnique({ where: { id: offerId } });
+    if (!offer) {
+      throw new NotFoundException('Oferta no encontrada');
+    }
+    return offer;
+  }
+
   async addZardas(userId: string, amount: number, reason: string, type: string = 'MANUAL', orderId?: string, createdBy?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Crear transacción
       await tx.zardasTransaction.create({
         data: {
@@ -84,7 +107,7 @@ export class ZardasService {
       throw new Error('Saldo insuficiente');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Crear transacción negativa
       await tx.zardasTransaction.create({
         data: {
