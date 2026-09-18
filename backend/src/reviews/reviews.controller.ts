@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/guards/roles.decorator';
 import { Role } from '../../../shared/enums';
+import { CreateReviewDto } from './dto/create-review.dto';
 
 @Controller('reviews')
 export class ReviewsController {
@@ -11,8 +12,11 @@ export class ReviewsController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() body: any) {
-    return this.reviewsService.create(body);
+  create(@Req() req: any, @Body() body: CreateReviewDto) {
+    return this.reviewsService.create(req.user?.userId, {
+      rating: body.rating,
+      comment: body.comment,
+    });
   }
 
   @Get()
