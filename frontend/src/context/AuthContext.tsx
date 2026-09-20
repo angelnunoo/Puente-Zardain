@@ -1,6 +1,8 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { authApi } from '../lib/api';
+import { isJwtExpired, nextSessionTokens } from '../lib/auth-token';
 
 type AuthState = {
   token: string | null;
@@ -19,53 +21,56 @@ type AuthContextValue = AuthState & {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// Helper para verificar si el token está expirado
-const isTokenExpired = (token: string): boolean => {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const currentTime = Date.now() / 1000;
-    return payload.exp < currentTime;
-  } catch {
-    return true;
-  }
-};
-
-// Helper para refrescar el token
-const refreshAccessToken = async (refreshToken: string): Promise<{ access_token: string; refresh_token: string } | null> => {
-  try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-
-    if (response.ok) {
-      return await response.json();
-    }
-    return null;
-  } catch {
-    return null;
-  }
-};
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
-  const isTokenExpired = useMemo(() => {
+  const tokenExpired = useMemo(() => {
     if (!token) return true;
-    return isTokenExpired(token);
+    return isJwtExpired(token);
   }, [token]);
+
+  const persistSession = useCallback((accessToken: string, nextRefresh: string, userData?: any) => {
+    window.localStorage.setItem('token', accessToken);
+    window.localStorage.setItem('refreshToken', nextRefresh);
+    if (userData) {
+      window.localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+    }
+    setToken(accessToken);
+    setRefreshToken(nextRefresh);
+  }, []);
+
+  const signOut = useCallback(() => {
+    window.localStorage.removeItem('token');
+    window.localStorage.removeItem('refreshToken');
+    window.localStorage.removeItem('user');
+    setToken(null);
+    setRefreshToken(null);
+    setUser(null);
+  }, []);
+
+  const refreshSession = useCallback(async (currentRefreshToken: string): Promise<boolean> => {
+    try {
+      const newTokens = await authApi.refresh(currentRefreshToken);
+      const next = nextSessionTokens(newTokens, currentRefreshToken);
+      if (!next) {
+        return false;
+      }
+      persistSession(next.accessToken, next.refreshToken);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [persistSession]);
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem('token');
     const storedRefresh = window.localStorage.getItem('refreshToken');
     const storedUser = window.localStorage.getItem('user');
-    
+
     if (storedToken) {
       setToken(storedToken);
     }
@@ -73,83 +78,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRefreshToken(storedRefresh);
     }
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        window.localStorage.removeItem('user');
+      }
     }
     setLoading(false);
   }, []);
 
-  // Auto-refresh del token antes de que expire
   useEffect(() => {
     if (!token || !refreshToken || loading) return;
 
     const checkExpiration = () => {
-      if (isTokenExpired) {
-        refreshAccessToken(refreshToken).then((newTokens) => {
-          if (newTokens) {
-            setToken(newTokens.access_token);
-            setRefreshToken(newTokens.refresh_token);
-            window.localStorage.setItem('token', newTokens.access_token);
-            window.localStorage.setItem('refreshToken', newTokens.refresh_token);
-          } else {
-            // Si no se puede refrescar, cerrar sesión
-            signOut();
-          }
-        });
+      if (!isJwtExpired(token)) {
+        return;
       }
+
+      refreshSession(refreshToken).then((ok) => {
+        if (!ok) {
+          signOut();
+        }
+      });
     };
 
-    // Verificar cada minuto
+    checkExpiration();
     const interval = setInterval(checkExpiration, 60000);
     return () => clearInterval(interval);
-  }, [token, refreshToken, loading, isTokenExpired]);
+  }, [token, refreshToken, loading, refreshSession, signOut]);
 
   const value = useMemo(
-    () =>({
+    () => ({
       token,
       refreshToken,
       loading,
       user,
-      isTokenExpired,
+      isTokenExpired: tokenExpired,
       signIn(tokenValue: string, refreshTokenValue: string, userData?: any) {
-        window.localStorage.setItem('token', tokenValue);
-        window.localStorage.setItem('refreshToken', refreshTokenValue);
-        if (userData) {
-          window.localStorage.setItem('user', JSON.stringify(userData));
-          setUser(userData);
-        }
-        setToken(tokenValue);
-        setRefreshToken(refreshTokenValue);
+        persistSession(tokenValue, refreshTokenValue, userData);
       },
-      signOut() {
-        window.localStorage.removeItem('token');
-        window.localStorage.removeItem('refreshToken');
-        window.localStorage.removeItem('user');
-        setToken(null);
-        setRefreshToken(null);
-        setUser(null);
-      },
+      signOut,
       refreshAccessToken: async (): Promise<boolean> => {
         if (!refreshToken) return false;
-        
-        try {
-          const newTokens = await refreshAccessToken(refreshToken);
-          if (newTokens) {
-            setToken(newTokens.access_token);
-            setRefreshToken(newTokens.refresh_token);
-            window.localStorage.setItem('token', newTokens.access_token);
-            window.localStorage.setItem('refreshToken', newTokens.refresh_token);
-            return true;
-          }
-          return false;
-        } catch {
-          return false;
+        const ok = await refreshSession(refreshToken);
+        if (!ok) {
+          signOut();
         }
+        return ok;
       },
-      isTokenValid: (): boolean => {
-        return token && !isTokenExpired(token);
-      },
+      isTokenValid: (): boolean => Boolean(token) && !tokenExpired,
     }),
-    [token, refreshToken, loading, user, isTokenExpired],
+    [token, refreshToken, loading, user, tokenExpired, persistSession, signOut, refreshSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
