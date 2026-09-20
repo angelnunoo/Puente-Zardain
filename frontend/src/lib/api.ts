@@ -52,7 +52,7 @@ export const authApi = {
     });
   },
   refresh(refreshToken: string) {
-    return request<{ access_token: string }>('/auth/refresh', {
+    return request<{ access_token: string; refresh_token?: string }>('/auth/refresh', {
       method: 'POST',
       body: JSON.stringify({ refreshToken }),
     });
