@@ -302,6 +302,12 @@ export const zardasApi = {
       method: 'GET',
     });
   },
+  getBalance(token: string | null, userId: string) {
+    return authorizedRequest<any>(token, `/zardas/${userId}/balance`, { method: 'GET' });
+  },
+  getHistory(token: string | null, userId: string) {
+    return authorizedRequest<any[]>(token, `/zardas/${userId}/history`, { method: 'GET' });
+  },
 };
 
 export const aboutApi = {

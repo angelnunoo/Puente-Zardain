@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../../context/AuthContext'
 import { useNotifications } from '../../context/NotificationsContext'
 import { ordersApi, paymentsApi, zardasApi } from '../../lib/api'
+import { toOrderPayloadItems } from '../../lib/order-items'
 import { PaymentMethod } from '../../../../../shared/enums'
 
 export default function CheckoutPage() {
@@ -39,7 +40,7 @@ export default function CheckoutPage() {
         }
 
         const previewPayload = {
-          items: cartItems,
+          items: toOrderPayloadItems(cartItems),
           delivery,
           address: delivery ? address : undefined,
           redemption: selectedRedemption ? { discountAmount: selectedRedemption } : undefined,
@@ -100,7 +101,7 @@ export default function CheckoutPage() {
     try {
       const cartItems = JSON.parse(localStorage.getItem('cart') || '[]')
       await ordersApi.createOrder(token, {
-        items: cartItems,
+        items: toOrderPayloadItems(cartItems),
         delivery,
         address: delivery ? address : undefined,
         paymentMethod: selectedMethod,
@@ -305,10 +306,10 @@ export default function CheckoutPage() {
                               Pago al recibir el pedido
                             </div>
                           </div>
-
                         </div>
-                      </label>
-                    </div>
+                      </div>
+                    </label>
+                  </div>
                 ))}
               </div>
 
