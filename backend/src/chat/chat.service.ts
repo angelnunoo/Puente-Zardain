@@ -1,25 +1,61 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+
+export interface ChatActor {
+  userId: string;
+  role?: string;
+}
 
 @Injectable()
 export class ChatService {
   constructor(private prisma: PrismaService) {}
 
-  async saveMessage(data: { orderId: string; sender: string; content: string }) {
+  async assertCanAccessOrder(orderId: string, actor: ChatActor) {
+    if (!actor?.userId) {
+      throw new ForbiddenException('No puedes acceder a este chat');
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Chat no encontrado');
+    }
+
+    if (actor.role !== 'ADMIN' && order.userId !== actor.userId) {
+      throw new ForbiddenException('No puedes acceder a este chat');
+    }
+
+    return order;
+  }
+
+  async saveMessage(data: { orderId: string; content: string }, actor: ChatActor) {
+    await this.assertCanAccessOrder(data.orderId, actor);
+
+    const content = typeof data.content === 'string' ? data.content.trim() : '';
+    if (!content) {
+      throw new BadRequestException('Mensaje inválido');
+    }
+
     const chat = await this.prisma.chat.findUnique({ where: { orderId: data.orderId } });
     if (!chat) {
-      throw new NotFoundException('Chat not found');
+      throw new NotFoundException('Chat no encontrado');
     }
+
     return this.prisma.message.create({
       data: {
         chatId: chat.id,
-        sender: data.sender,
-        content: data.content,
+        sender: actor.role === 'ADMIN' ? 'admin' : 'Cliente',
+        content,
       },
     });
   }
 
-  async getMessages(orderId: string) {
+  async getMessages(orderId: string, actor: ChatActor) {
+    await this.assertCanAccessOrder(orderId, actor);
+
     const chat = await this.prisma.chat.findUnique({
       where: { orderId },
       include: { messages: true },
