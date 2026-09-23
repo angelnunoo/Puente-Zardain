@@ -1,16 +1,11 @@
 import { LoginDto, RegisterDto } from '../../../shared/dtos';
 import { PublicScheduleResponse } from '../../../shared/interfaces';
+import { buildFetchInit } from './http';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 async function request<T>(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-    ...init,
-  });
+  const res = await fetch(`${API_BASE}${path}`, buildFetchInit(init));
 
   const payload = await res.json();
   if (!res.ok) {
@@ -170,7 +165,7 @@ export const productsApi = {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-      body: data,
+      body: JSON.stringify(data),
     });
   },
   update(token: string, id: string, data: UpdateProductDto) {
@@ -179,7 +174,7 @@ export const productsApi = {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-      body: data,
+      body: JSON.stringify(data),
     });
   },
   updateStock(token: string, id: string, data: { stock: number }) {
@@ -188,7 +183,7 @@ export const productsApi = {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-      body: data,
+      body: JSON.stringify(data),
     });
   },
   toggleActive(token: string, id: string) {
