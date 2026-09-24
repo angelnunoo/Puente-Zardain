@@ -6,7 +6,7 @@ import { OrderStatus, Role, PaymentMethod } from '../../../shared/enums';
 import { CreateOrderDto, PreviewOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderDomain } from './domain/order.entity';
-import { OrdersRepository } from './orders.repository';
+import { OrdersRepository, orderUserSelect } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -122,7 +122,7 @@ export class OrdersService {
         },
         include: {
           items: true,
-          user: true,
+          user: { select: orderUserSelect },
         },
       });
 
