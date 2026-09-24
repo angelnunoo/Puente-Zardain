@@ -10,6 +10,9 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
+// Alias used by backend guards. Same values as UserRole and the Prisma Role enum.
+export { UserRole as Role };
+
 export enum UserLeague {
   BRONZE = 'BRONZE',
   SILVER = 'SILVER',
