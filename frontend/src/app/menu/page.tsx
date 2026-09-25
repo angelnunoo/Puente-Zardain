@@ -1,6 +1,6 @@
 'use client'
 
-import MenuSectionFixed from '../components/home/menu-section-fixed'
+import MenuSectionFixed from '../../components/home/menu-section-fixed'
 
 export default function MenuPage() {
   return (
