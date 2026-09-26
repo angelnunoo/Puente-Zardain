@@ -3,12 +3,11 @@
  * Módulo global con servicios compartidos, excepciones, guards, pipes y filtros
  */
 
-import { Global, Module, APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/common';
+import { Global, Module, APP_FILTER, APP_PIPE } from '@nestjs/common';
 import { EventBusService } from './events/event-bus.service';
 import { OrderEventsService } from './events/order-events.service';
 import { AppLogger } from './logger/app-logger.service';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
-import { RoleGuard } from './guards/role.guard';
 import { AppValidationPipe } from './pipes/validation.pipe';
 
 @Global()
@@ -22,11 +21,9 @@ import { AppValidationPipe } from './pipes/validation.pipe';
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
     },
-    // Guards globales
-    {
-      provide: APP_GUARD,
-      useClass: RoleGuard,
-    },
+    // Role checks stay on each route as RolesGuard after JwtAuthGuard.
+    // Registering RoleGuard globally runs it before JWT auth, so request.user
+    // is still empty and every @Roles handler is rejected.
     // Pipes globales
     {
       provide: APP_PIPE,
