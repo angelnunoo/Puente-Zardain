@@ -3,14 +3,13 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './AuthContext'
 import { cartApi } from '../lib/api'
-
-interface CartItem {
-  productId: string
-  name: string
-  price: number
-  quantity: number
-  customizations?: string
-}
+import {
+  CART_STORAGE_KEY,
+  CART_UPDATED_EVENT,
+  createCartStorageController,
+  readStoredCart,
+  type CartItem,
+} from './cart-sync'
 
 interface CartContextValue {
   items: CartItem[]
@@ -27,18 +26,9 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | undefined>(undefined)
 
-const CART_STORAGE_KEY = 'cart'
-
 function getStorageCart(): CartItem[] {
   if (typeof window === 'undefined') return []
-  const stored = window.localStorage.getItem(CART_STORAGE_KEY)
-  if (!stored) return []
-
-  try {
-    return JSON.parse(stored) as CartItem[]
-  } catch {
-    return []
-  }
+  return readStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))
 }
 
 function mergeCarts(localItems: CartItem[], remoteItems: CartItem[]) {
@@ -67,17 +57,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth()
   const [items, setItems] = useState<CartItem[]>([])
   const [remoteLoaded, setRemoteLoaded] = useState(false)
-  const isMounted = useRef(false)
+  const persistGate = useRef(createCartStorageController())
 
   useEffect(() => {
     setItems(getStorageCart())
-    isMounted.current = true
   }, [])
 
   useEffect(() => {
-    if (!isMounted.current) return
+    const stored = window.localStorage.getItem(CART_STORAGE_KEY)
+    if (!persistGate.current.shouldWrite(items, stored)) return
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items))
   }, [items])
+
+  useEffect(() => {
+    const syncFromStorage = (event?: Event) => {
+      if (event instanceof StorageEvent && event.key && event.key !== CART_STORAGE_KEY) return
+      setItems(getStorageCart())
+    }
+
+    window.addEventListener(CART_UPDATED_EVENT, syncFromStorage)
+    window.addEventListener('storage', syncFromStorage)
+    return () => {
+      window.removeEventListener(CART_UPDATED_EVENT, syncFromStorage)
+      window.removeEventListener('storage', syncFromStorage)
+    }
+  }, [])
 
   useEffect(() => {
     const fetchRemoteCart = async () => {
