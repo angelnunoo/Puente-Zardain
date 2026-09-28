@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { productsApi } from '../../lib/api';
 import { ProductResponseDto } from '../../../../shared/dtos';
 import { useAuth } from '../../context/AuthContext';
+import { CART_UPDATED_EVENT } from '../../context/cart-sync';
 
 export default function MenuSectionFixed() {
   const { token } = useAuth();
@@ -77,7 +78,7 @@ export default function MenuSectionFixed() {
       localStorage.setItem('cart', JSON.stringify(cartItems));
       
       // Actualizar el contador del carrito si existe
-      const cartEvent = new CustomEvent('cartUpdated', { detail: { count: cartItems.length } });
+      const cartEvent = new CustomEvent(CART_UPDATED_EVENT, { detail: { count: cartItems.length } });
       window.dispatchEvent(cartEvent);
       
       alert(`${product.name} añadido al carrito`);
