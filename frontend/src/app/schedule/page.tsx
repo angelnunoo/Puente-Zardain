@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { scheduleApi } from '../../lib/api'
+import { formatScheduleDateTime, formatScheduleTime } from '../../lib/schedule-view'
 import { PublicScheduleResponse } from '../../../../shared/interfaces'
 
 type ScheduleWindow = {
@@ -47,17 +48,6 @@ export default function SchedulePage() {
   useEffect(() => {
     loadSchedule()
   }, [])
-
-  const formatNextOpenTime = (date: Date) => {
-    return date.toLocaleString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
 
   if (loading) {
     return (
@@ -124,15 +114,12 @@ export default function SchedulePage() {
                 </p>
                 {!schedule?.isOpenNow && schedule?.nextOpenTime && (
                   <p className="text-sm text-red-600 mt-1">
-                    Próxima apertura: {formatNextOpenTime(schedule.nextOpenTime)}
+                    Próxima apertura: {formatScheduleDateTime(schedule.nextOpenTime)}
                   </p>
                 )}
                 {schedule?.isOpenNow && schedule?.nextCloseTime && (
                   <p className="text-sm text-green-600 mt-1">
-                    Cierra a las: {schedule.nextCloseTime.toLocaleTimeString('es-ES', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    Cierra a las: {formatScheduleTime(schedule.nextCloseTime)}
                   </p>
                 )}
               </div>

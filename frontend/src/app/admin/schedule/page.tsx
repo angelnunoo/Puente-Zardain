@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { scheduleApi } from '../../../lib/api'
+import { buildScheduleWindowPayload, readAdminSchedule } from '../../../lib/schedule-view'
 
 type ScheduleWindow = {
   id: string
@@ -40,8 +41,9 @@ export default function AdminSchedule() {
       if (!token) return
       setLoading(true)
       const data = await scheduleApi.getAdminSchedule(token)
-      setWindows(data.windows || [])
-      setSpecials(data.specials || [])
+      const schedule = readAdminSchedule(data)
+      setWindows(schedule.windows as ScheduleWindow[])
+      setSpecials(schedule.specials as SpecialSchedule[])
       setLoading(false)
     } catch (err: any) {
       setLoading(false)
@@ -56,7 +58,7 @@ export default function AdminSchedule() {
   const handleCreateWindow = async () => {
     try {
       if (!token) return
-      await scheduleApi.createWindow(token, newWindow)
+      await scheduleApi.createWindow(token, buildScheduleWindowPayload(newWindow))
       setMessage('Ventana creada correctamente')
       loadSchedule()
     } catch (err: any) {
