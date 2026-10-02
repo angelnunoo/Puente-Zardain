@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { resolveHttpApiBase } from '../lib/api-base';
 
 type AuthState = {
   token: string | null;
@@ -33,7 +34,7 @@ const isTokenExpired = (token: string): boolean => {
 // Helper para refrescar el token
 const refreshAccessToken = async (refreshToken: string): Promise<{ access_token: string; refresh_token: string } | null> => {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/refresh`, {
+    const response = await fetch(`${resolveHttpApiBase()}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { resolveHttpApiBase } from '../../lib/api-base';
 
 interface FooterData {
   address: string;
@@ -34,7 +35,7 @@ export default function Footer() {
   useEffect(() => {
     const fetchFooterData = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/restaurant/footer`);
+        const response = await fetch(`${resolveHttpApiBase()}/restaurant/footer`);
         if (response.ok) {
           const data = await response.json();
           setFooterData(data);
