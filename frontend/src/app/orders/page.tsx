@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useAuth } from '../../context/AuthContext'
 import { ordersApi } from '../../lib/api'
+import { resolveApiOrigin } from '../../lib/api-base'
 
 interface Order {
   id: string
@@ -84,7 +85,7 @@ export default function Orders() {
     }
   }, [token])
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+  const apiUrl = resolveApiOrigin()
 
   useEffect(() => {
     if (!token || !selectedOrderId) {

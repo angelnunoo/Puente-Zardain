@@ -1,7 +1,8 @@
 import { LoginDto, RegisterDto } from '../../../shared/dtos';
 import { PublicScheduleResponse } from '../../../shared/interfaces';
+import { resolveHttpApiBase } from './api-base';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_BASE = resolveHttpApiBase();
 
 async function request<T>(path: string, init: RequestInit = {}) {
   const res = await fetch(`${API_BASE}${path}`, {

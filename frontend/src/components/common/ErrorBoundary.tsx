@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { resolveHttpApiBase } from '../../lib/api-base';
 
 interface Props {
   children: ReactNode;
@@ -41,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
       };
 
       // Send to error tracking service
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/errors/log`, {
+      fetch(`${resolveHttpApiBase()}/errors/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(errorData),
