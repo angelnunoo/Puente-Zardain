@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ReportPeriod } from '../../../../shared/enums';
+import { ReportPeriod } from '../../../shared/enums';
 
 @Injectable()
 export class AnalyticsService {
@@ -62,7 +62,14 @@ export class AnalyticsService {
             product: true
           }
         },
-        user: true
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc'
@@ -370,7 +377,13 @@ export class AnalyticsService {
         paymentStatus: 'SUCCEEDED'
       },
       include: {
-        user: true
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       }
     });
 

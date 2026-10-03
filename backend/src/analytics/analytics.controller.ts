@@ -10,11 +10,11 @@ import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/guards/roles.decorator';
-import { Role, ReportPeriod } from '../../../../shared/enums';
+import { UserRole, ReportPeriod } from '../../../shared/enums';
 
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(UserRole.ADMIN)
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
