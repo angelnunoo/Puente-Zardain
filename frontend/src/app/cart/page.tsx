@@ -110,6 +110,7 @@ export default function Cart() {
         items: items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
+          customizations: item.customizations || undefined,
         })),
         delivery,
         address: delivery ? address.trim() : undefined,
@@ -160,23 +161,26 @@ export default function Cart() {
       ) : (
         <div className="space-y-4 mt-4">
           {items.map((item) => (
-            <div key={item.productId} className="rounded border p-4 bg-white shadow-sm">
+            <div key={`${item.productId}:${item.customizations || ''}`} className="rounded border p-4 bg-white shadow-sm">
               <div className="flex justify-between items-start gap-4">
                 <div>
                   <h2 className="font-semibold">{item.name}</h2>
+                  {item.customizations ? (
+                    <p className="text-sm text-gray-600">Notas: {item.customizations}</p>
+                  ) : null}
                   <p className="text-sm text-gray-600">Precio unitario: {item.price}€</p>
                   <p className="text-sm text-gray-600">Subtotal: {item.price * item.quantity}€</p>
                 </div>
-                <button className="text-red-600 hover:text-red-800" onClick={() => removeItem(item.productId)}>
+                <button className="text-red-600 hover:text-red-800" onClick={() => removeItem(item.productId, item.customizations)}>
                   Eliminar
                 </button>
               </div>
               <div className="mt-3 flex items-center gap-2">
-                <button className="rounded border px-3 py-1" onClick={() => updateQuantity(item.productId, item.quantity - 1)}>
+                <button className="rounded border px-3 py-1" onClick={() => updateQuantity(item.productId, item.quantity - 1, item.customizations)}>
                   -
                 </button>
                 <span>{item.quantity}</span>
-                <button className="rounded border px-3 py-1" onClick={() => updateQuantity(item.productId, item.quantity + 1)}>
+                <button className="rounded border px-3 py-1" onClick={() => updateQuantity(item.productId, item.quantity + 1, item.customizations)}>
                   +
                 </button>
               </div>

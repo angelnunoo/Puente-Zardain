@@ -6,6 +6,7 @@ import { OrderStatus, Role, PaymentMethod } from '../../../shared/enums';
 import { CreateOrderDto, PreviewOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderDomain } from './domain/order.entity';
+import { evaluateOrderItems } from './domain/order-items';
 import { OrdersRepository } from './orders.repository';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -32,8 +33,9 @@ export class OrdersService {
     const itemIds = payload.items.map((item) => item.productId);
     const products = await this.ordersRepository.findProductsByIds(itemIds);
 
-    if (products.length !== itemIds.length) {
-      throw new BadRequestException('One or more products are invalid or unavailable');
+    const productCheck = evaluateOrderItems(products, payload.items);
+    if (!productCheck.ok) {
+      throw new BadRequestException(productCheck.message);
     }
 
     // Aplicar oferta si existe y validar canje
@@ -90,11 +92,9 @@ export class OrdersService {
     }
 
     const order = await this.prisma.$transaction(async (tx) => {
-      for (const item of payload.items) {
-        const product = products.find((p) => p.id === item.productId);
-        if (product && product.stock < item.quantity) {
-          throw new BadRequestException(`No hay suficiente stock para ${product.name}`);
-        }
+      const stockCheck = evaluateOrderItems(products, payload.items, { checkStock: true });
+      if (!stockCheck.ok) {
+        throw new BadRequestException(stockCheck.message);
       }
 
       const created = await tx.order.create({
@@ -164,8 +164,9 @@ export class OrdersService {
     const itemIds = payload.items.map((item) => item.productId);
     const products = await this.ordersRepository.findProductsByIds(itemIds);
 
-    if (products.length !== itemIds.length) {
-      throw new BadRequestException('One or more products are invalid or unavailable');
+    const productCheck = evaluateOrderItems(products, payload.items);
+    if (!productCheck.ok) {
+      throw new BadRequestException(productCheck.message);
     }
 
     let discount = 0;
