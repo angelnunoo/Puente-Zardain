@@ -355,6 +355,16 @@ export interface IErrorResponse {
   path?: string;
   request_id?: string;
 }
+
+export interface ScheduleWindow {
+  id: string;
+  dayOfWeek: number;
+  shift: number;
+  openTime: string;
+  closeTime: string;
+  active: boolean;
+  note?: string;
+  createdAt: string;
   updatedAt: string;
 }
 
